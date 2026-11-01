@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -23,9 +23,17 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Coordinate Center: Surabaya / Metropolitan Gerbangkertosusila
-const DEFAULT_CENTER: [number, number] = [-7.265, 112.745];
-const DEFAULT_ZOOM = 12;
+// Bounding box strictly limiting the map to Gerbangkertosusila
+// (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan)
+const GERBANGKERTOSUSILA_BOUNDS: L.LatLngBoundsExpression = [
+  [-7.82, 112.02], // Barat Daya (Selatan Mojokerto & Barat Lamongan)
+  [-6.80, 113.20], // Timur Laut (Timur Bangkalan & Utara Lamongan/Gresik)
+];
+
+const DEFAULT_CENTER: [number, number] = [-7.30, 112.72];
+const DEFAULT_ZOOM = 11;
+const MIN_ZOOM = 10;
+const MAX_ZOOM = 18;
 
 // Thematic Style Constants based on Requirements
 const THEMATIC_STYLES = {
@@ -99,7 +107,6 @@ function MapAutoResizer() {
   const map = useMap();
 
   useEffect(() => {
-    // Initial size invalidation
     map.invalidateSize();
     const t1 = setTimeout(() => map.invalidateSize(), 150);
     const t2 = setTimeout(() => map.invalidateSize(), 500);
@@ -142,7 +149,7 @@ function MapResetControl() {
   const map = useMap();
   return (
     <div className="leaflet-top leaflet-left" style={{ marginTop: '80px', pointerEvents: 'auto' }}>
-      <div className="leaflet-control leaflet-bar shadow-md">
+      <div className="leaflet-control leaflet-bar shadow-xs border border-slate-300 dark:border-slate-700">
         <button
           onClick={() => map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1 })}
           title="Pusatkan Peta ke Gerbangkertosusila"
@@ -246,7 +253,7 @@ export default function LeafletMap({
     };
   }, [onDataLoaded]);
 
-  // Create popup HTML with modern responsive card structure and intelligent property fallback
+  // Clean, professional popup card structure
   const createPopupContent = useCallback(
     (
       props: Record<string, unknown>,
@@ -260,7 +267,6 @@ export default function LeafletMap({
         (props['name:id'] as string) ||
         (props['name:en'] as string);
 
-      // Intelligent fallback name if OSM name is null
       let name = rawName;
       if (!name) {
         if (props.leisure) {
@@ -279,7 +285,6 @@ export default function LeafletMap({
 
       const kategori = (props.kategori as string) || theme.label;
 
-      // Extract and compile present OSM tags
       const osmTags: string[] = [];
       if (props.leisure) osmTags.push(`leisure=${props.leisure}`);
       if (props.landuse) osmTags.push(`landuse=${props.landuse}`);
@@ -322,41 +327,41 @@ export default function LeafletMap({
       }
 
       return `
-        <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 250px; max-width: 330px; padding: 2px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 240px; max-width: 320px; padding: 2px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="width: 10px; height: 10px; border-radius: 50%; background-color: ${theme.fillColor}; display: inline-block; box-shadow: 0 0 4px ${theme.fillColor};"></span>
-              <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #4b5563;">${kategori}</span>
+              <span style="width: 9px; height: 9px; border-radius: 2px; background-color: ${theme.fillColor}; display: inline-block;"></span>
+              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #334155;">${kategori}</span>
             </div>
-            <span style="font-size: 9px; padding: 2px 6px; border-radius: 9999px; background: #f3f4f6; color: #374151; font-weight: 600;">${kabKota}</span>
+            <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #e2e8f0;">${kabKota}</span>
           </div>
 
-          <h3 style="font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 8px 0; line-height: 1.3;">${name}</h3>
+          <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; line-height: 1.3;">${name}</h3>
 
-          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #4b5563; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #475569;">
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #6b7280;">Kecamatan / Lokasi:</span>
-              <span style="font-weight: 600; color: #1f2937; text-align: right; max-width: 170px;">${kecamatan}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: #6b7280;">Estimasi Luas:</span>
-              <span style="font-weight: 700; color: #047857;">${displayLuas}</span>
+              <span style="color: #64748b;">Lokasi / Wilayah:</span>
+              <span style="font-weight: 600; color: #1e293b; text-align: right; max-width: 170px;">${kecamatan}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #6b7280;">Status / Akses:</span>
-              <span style="font-weight: 500; color: #1f2937;">${status}</span>
+              <span style="color: #64748b;">Estimasi Luas:</span>
+              <span style="font-weight: 700; color: #15803d;">${displayLuas}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #6b7280;">Pengelola:</span>
-              <span style="font-weight: 500; color: #1f2937; text-align: right; max-width: 170px;">${pengelola}</span>
+              <span style="color: #64748b;">Status Akses:</span>
+              <span style="font-weight: 500; color: #1e293b;">${status}</span>
             </div>
-            <div style="margin-top: 4px; padding-top: 6px; border-top: 1px dashed #e5e7eb;">
-              <span style="color: #6b7280; display: block; margin-bottom: 2px;">Keterangan / Fasilitas:</span>
-              <span style="font-size: 10.5px; color: #374151; line-height: 1.3;">${fasilitas}</span>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Pengelola:</span>
+              <span style="font-weight: 500; color: #1e293b; text-align: right; max-width: 170px;">${pengelola}</span>
             </div>
-            <div style="margin-top: 4px; padding-top: 4px;">
-              <span style="color: #9ca3af; font-size: 9.5px; display: block;">OSM Tag:</span>
-              <code style="display: inline-block; background-color: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-size: 9px; color: #1f2937; margin-top: 2px; word-break: break-all;">${osmTag}</code>
+            <div style="margin-top: 4px; padding-top: 5px; border-top: 1px solid #f1f5f9;">
+              <span style="color: #64748b; display: block; font-size: 10px; margin-bottom: 2px;">Fasilitas / Fungsi:</span>
+              <span style="font-size: 11px; color: #334155; line-height: 1.3;">${fasilitas}</span>
+            </div>
+            <div style="margin-top: 3px; padding-top: 3px;">
+              <span style="color: #94a3b8; font-size: 9.5px; display: block;">OSM Tag:</span>
+              <code style="display: inline-block; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 1px 4px; border-radius: 3px; font-size: 9.5px; color: #334155; margin-top: 2px; word-break: break-all;">${osmTag}</code>
             </div>
           </div>
         </div>
@@ -382,14 +387,12 @@ export default function LeafletMap({
       const props = (feature.properties || {}) as Record<string, unknown>;
       const areaHa = calculateFeatureAreaHa(feature);
 
-      // Popup binding
       const popupHtml = createPopupContent(props, defaultStyle, areaHa);
       layer.bindPopup(popupHtml, {
-        maxWidth: 340,
+        maxWidth: 330,
         className: 'custom-leaflet-popup',
       });
 
-      // Interactive hover effects
       layer.on({
         mouseover: (e: L.LeafletMouseEvent) => {
           const targetLayer = e.target as L.Path;
@@ -426,15 +429,19 @@ export default function LeafletMap({
     <div className="relative w-full h-full min-h-[400px]">
       {/* Map notification / error indicator */}
       {fetchError && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-red-600/90 text-white text-xs px-4 py-2 rounded-lg shadow-lg backdrop-blur-sm">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-red-700 text-white text-xs px-3.5 py-1.5 rounded border border-red-800 shadow-md">
           Perhatian: {fetchError}
         </div>
       )}
 
-      {/* Leaflet MapContainer with preferCanvas for rendering 3,800+ MultiPolygons smoothly */}
+      {/* Leaflet MapContainer bounded strictly to Gerbangkertosusila */}
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
+        maxBounds={GERBANGKERTOSUSILA_BOUNDS}
+        maxBoundsViscosity={1.0}
         preferCanvas={true}
         scrollWheelZoom={true}
         className="w-full h-full z-0 outline-none"
@@ -447,7 +454,7 @@ export default function LeafletMap({
 
         {/* 3 Basemaps & Overlays Layer Control */}
         <LayersControl position="topright" collapsed={false}>
-          {/* Basemap 1: OpenStreetMap Standard (Default - Langsung Muncul Bersih & Cepat Tanpa API Key) */}
+          {/* Basemap 1: OpenStreetMap Standard (Default) */}
           <LayersControl.BaseLayer checked name="OpenStreetMap Standard (Default)">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -537,64 +544,63 @@ export default function LeafletMap({
         </LayersControl>
       </MapContainer>
 
-      {/* Map Legend Overlay Component */}
-      <div className="absolute bottom-6 right-6 z-[900] bg-white/95 dark:bg-gray-900/95 backdrop-blur-md p-3.5 rounded-xl shadow-xl border border-gray-200/80 dark:border-gray-800 pointer-events-auto transition-all max-w-[260px]">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-200/60 dark:border-gray-800">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      {/* Map Legend Overlay Component - Clean Solid Cartographic Box */}
+      <div className="absolute bottom-5 right-5 z-[900] bg-white dark:bg-slate-900 p-3 rounded-lg shadow-md border border-slate-300 dark:border-slate-800 pointer-events-auto max-w-[250px]">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-700 dark:bg-emerald-500"></span>
             Legenda Tematik RTH
           </span>
-          <span className="text-[10px] text-gray-500 font-mono">Permen ATR 14/2022</span>
+          <span className="text-[10px] text-slate-500 font-mono">ATR/BPN 14/22</span>
         </div>
 
         <div className="space-y-2 text-xs">
           {/* Taman Kota */}
-          <div className="flex items-center gap-2.5 group cursor-default">
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-5 h-4 rounded border border-gray-700 shadow-xs flex-shrink-0 transition-transform group-hover:scale-110"
+              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
               style={{ backgroundColor: THEMATIC_STYLES.taman.fillColor, opacity: 0.85 }}
             />
             <div className="flex flex-col">
-              <span className="text-gray-800 dark:text-gray-200 font-medium leading-none">
+              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.taman.label}
               </span>
-              <span className="text-[10px] text-gray-600 dark:text-gray-300">Taman aktif & alun-alun publik</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Taman & alun-alun publik</span>
             </div>
           </div>
 
           {/* Hutan Mangrove */}
-          <div className="flex items-center gap-2.5 group cursor-default">
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-5 h-4 rounded border border-gray-700 shadow-xs flex-shrink-0 transition-transform group-hover:scale-110"
+              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
               style={{ backgroundColor: THEMATIC_STYLES.mangrove.fillColor, opacity: 0.85 }}
             />
             <div className="flex flex-col">
-              <span className="text-gray-800 dark:text-gray-200 font-medium leading-none">
+              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.mangrove.label}
               </span>
-              <span className="text-[10px] text-gray-600 dark:text-gray-300">Sabuk hijau & konservasi pesisir</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Sabuk hijau & mangrove</span>
             </div>
           </div>
 
           {/* Lapangan Olahraga */}
-          <div className="flex items-center gap-2.5 group cursor-default">
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-5 h-4 rounded border border-gray-700 shadow-xs flex-shrink-0 transition-transform group-hover:scale-110"
+              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
               style={{ backgroundColor: THEMATIC_STYLES.olahraga.fillColor, opacity: 0.85 }}
             />
             <div className="flex flex-col">
-              <span className="text-gray-800 dark:text-gray-200 font-medium leading-none">
+              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.olahraga.label}
               </span>
-              <span className="text-[10px] text-gray-600 dark:text-gray-300">Stadion, sirkuit & lapangan publik</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Stadion & lapangan terbuka</span>
             </div>
           </div>
         </div>
 
-        {/* Interaction hint */}
-        <div className="mt-2.5 pt-2 border-t border-gray-200/60 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-300 flex items-center justify-between">
-          <span>* Sorot (hover) poligon untuk detail</span>
-          <span>Klik: Info</span>
+        <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+          <span>* Batas: Gerbangkertosusila</span>
+          <span>Klik poligon: Detail</span>
         </div>
       </div>
     </div>

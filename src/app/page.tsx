@@ -19,7 +19,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-// Preset locations matched with genuine Gerbangkertosusila GeoJSON dataset
+// Preset locations strictly within Gerbangkertosusila
 const PRESET_LOCATIONS: {
   name: string;
   category: 'taman' | 'mangrove' | 'olahraga';
@@ -63,19 +63,37 @@ const PRESET_LOCATIONS: {
     kabKota: 'Kab. Gresik',
   },
   {
-    name: 'Mangrove Information Center',
+    name: 'Alun-Alun Lamongan',
+    category: 'taman',
+    coords: [-7.1207, 112.4158],
+    kabKota: 'Kab. Lamongan',
+  },
+  {
+    name: 'Alun-Alun Bangkalan',
+    category: 'taman',
+    coords: [-7.0278, 112.7471],
+    kabKota: 'Kab. Bangkalan',
+  },
+  {
+    name: 'Alun-Alun Mojokerto',
+    category: 'taman',
+    coords: [-7.4682, 112.4332],
+    kabKota: 'Kota Mojokerto',
+  },
+  {
+    name: 'Mangrove Information Center Wonorejo',
     category: 'mangrove',
     coords: [-7.3077, 112.8211],
-    kabKota: 'Kota Surabaya Timur',
+    kabKota: 'Kota Surabaya',
   },
   {
-    name: 'Danau & Konservasi UNESA',
+    name: 'Danau & Hutan Kampus UNESA',
     category: 'mangrove',
     coords: [-7.3137, 112.7258],
-    kabKota: 'Kota Surabaya Selatan',
+    kabKota: 'Kota Surabaya',
   },
   {
-    name: 'Hutan Rewwin Sidoarjo',
+    name: 'Hutan Rewwin Waru',
     category: 'mangrove',
     coords: [-7.3448, 112.7532],
     kabKota: 'Kab. Sidoarjo',
@@ -90,13 +108,13 @@ const PRESET_LOCATIONS: {
     name: 'Ciputra Golf Club',
     category: 'olahraga',
     coords: [-7.2945, 112.6391],
-    kabKota: 'Kota Surabaya Barat',
+    kabKota: 'Kota Surabaya',
   },
   {
     name: 'Pakuwon Golf & Family Club',
     category: 'olahraga',
     coords: [-7.2932, 112.6583],
-    kabKota: 'Kota Surabaya Barat',
+    kabKota: 'Kota Surabaya',
   },
 ];
 
@@ -115,10 +133,10 @@ export default function Home() {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'taman' | 'mangrove' | 'olahraga'>('all');
 
   const [stats, setStats] = useState({
-    tamanCount: 1993,
-    mangroveCount: 993,
-    olahragaCount: 805,
-    totalAreaHa: 216007.5,
+    tamanCount: 1796,
+    mangroveCount: 701,
+    olahragaCount: 735,
+    totalAreaHa: 59065.2,
   });
 
   const handleFlyTo = (coords: [number, number]) => {
@@ -136,28 +154,28 @@ export default function Home() {
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 md:hidden"
+          className="fixed inset-0 bg-slate-900/50 z-30 md:hidden"
         />
       )}
 
-      {/* LEFT SIDEBAR */}
+      {/* LEFT SIDEBAR - Solid, flat, professional cartographic styling */}
       <aside
-        className={`fixed md:relative z-40 h-full w-[85vw] sm:w-[380px] md:w-[410px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 ease-in-out ${
+        className={`fixed md:relative z-40 h-full w-[85vw] sm:w-[380px] md:w-[410px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-lg md:shadow-none transition-transform duration-250 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-ml-[410px]'
         }`}
       >
-        {/* Sidebar Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white relative">
+        {/* Sidebar Header - Solid Slate 900, clean typography, NO gradients */}
+        <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-900 text-white">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                <Compass className="w-6 h-6 text-emerald-200" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400">
+                <Compass className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[10px] font-semibold tracking-wider uppercase text-emerald-200 block">
+                <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-400 block">
                   Kawasan Metropolitan
                 </span>
-                <h1 className="text-base sm:text-lg font-bold tracking-tight leading-tight">
+                <h1 className="text-base font-bold tracking-tight leading-snug">
                   WebGIS RTH Gerbangkertosusila
                 </h1>
               </div>
@@ -166,37 +184,37 @@ export default function Home() {
             {/* Mobile close button */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="md:hidden p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="md:hidden p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-white transition-colors"
               aria-label="Tutup Sidebar"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <p className="mt-2.5 text-xs text-emerald-50/90 leading-relaxed font-light">
-            Sistem Informasi Geografis Tematik Ruang Terbuka Hijau (RTH) Wilayah Aglomerasi Gerbangkertosusila (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan).
+          <p className="mt-2.5 text-xs text-slate-300 leading-relaxed font-normal">
+            Sistem Informasi Geografis Tematik Ruang Terbuka Hijau (RTH) kawasan Gerbangkertosusila (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan).
           </p>
 
-          <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-emerald-100">
-            <span className="px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs">
-              3.791 Poligon
+          <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-slate-300">
+            <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+              3.232 Poligon
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs">
-              Leaflet Canvas
+            <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+              Batas: Metropolitan
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs">
-              OpenStreetMap
+            <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+              Canvas Render
             </span>
           </div>
         </div>
 
-        {/* Sidebar Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-3 bg-slate-50 dark:bg-slate-900/50">
+        {/* Sidebar Tabs - Clean solid flat styling */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
               activeTab === 'overview'
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                ? 'border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 bg-white dark:bg-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -205,9 +223,9 @@ export default function Home() {
           </button>
           <button
             onClick={() => setActiveTab('locations')}
-            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
               activeTab === 'locations'
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                ? 'border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 bg-white dark:bg-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -216,9 +234,9 @@ export default function Home() {
           </button>
           <button
             onClick={() => setActiveTab('team')}
-            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
               activeTab === 'team'
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                ? 'border-emerald-700 text-emerald-800 dark:border-emerald-500 dark:text-emerald-400 bg-white dark:bg-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -232,112 +250,126 @@ export default function Home() {
           {/* TAB 1: OVERVIEW & STATISTIK */}
           {activeTab === 'overview' && (
             <div className="space-y-4">
-              {/* Target 20% Mandat UU Indicator Card */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-200/80 dark:border-emerald-800/50 shadow-xs">
+              {/* Target 20% Mandat UU Indicator Card - Solid background, NO gradient */}
+              <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    <Award className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
                       Target RTH Publik 20%
                     </span>
                   </div>
-                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
                     UU 26/2007
                   </span>
                 </div>
 
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
-                  Sesuai amanat UU Penataan Ruang & Permen ATR/BPN No. 14/2022, kawasan metropolitan wajib menyediakan minimal 20% RTH Publik dari total luas perkotaan.
+                  Amanat UU Penataan Ruang & Permen ATR/BPN No. 14/2022 mewajibkan minimal 20% RTH Publik dari total luas kawasan perkotaan.
                 </p>
 
-                {/* Progress bar */}
+                {/* Solid Progress Bar */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-medium">
-                    <span className="text-slate-600 dark:text-slate-400">Total Poligon Terpetakan:</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span className="text-slate-600 dark:text-slate-400">Total Terpetakan:</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-bold">
                       {stats.tamanCount + stats.mangroveCount + stats.olahragaCount} Poligon
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
+                  <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
                     <div
-                      className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
+                      className="bg-emerald-700 dark:bg-emerald-500 h-full rounded-full"
                       style={{ width: '85%' }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400">
-                    <span>Cakupan 6 Wilayah Aglomerasi</span>
-                    <span className="text-emerald-700 dark:text-emerald-300 font-medium">Data Lengkap ✓</span>
+                  <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                    <span>Cakupan 6 Daerah Aglomerasi</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-medium">Khusus Gerbangkertosusila ✓</span>
                   </div>
                 </div>
               </div>
 
-              {/* Statistics Grid */}
+              {/* Statistics Grid - Solid white/dark boxes, NO gradients */}
               <div className="grid grid-cols-2 gap-2.5">
-                <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <div className="flex items-center gap-2 mb-1 text-emerald-600 dark:text-emerald-400">
+                {/* Taman Kota */}
+                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5 mb-1 text-emerald-700 dark:text-emerald-400">
                     <Trees className="w-4 h-4" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       Taman Kota
                     </span>
                   </div>
                   <div className="text-lg font-bold text-slate-900 dark:text-white">
-                    {stats.tamanCount} <span className="text-xs font-normal text-slate-600 dark:text-slate-300">Poligon</span>
+                    {stats.tamanCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Poligon</span>
                   </div>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">Warna: Lime (#2ECC71)</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#2ECC71' }} />
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Hijau Cerah (#2ECC71)</span>
+                  </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <div className="flex items-center gap-2 mb-1 text-emerald-800 dark:text-emerald-300">
+                {/* Mangrove & Hutan */}
+                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5 mb-1 text-emerald-900 dark:text-emerald-300">
                     <Layers className="w-4 h-4" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       Mangrove & Hutan
                     </span>
                   </div>
                   <div className="text-lg font-bold text-slate-900 dark:text-white">
-                    {stats.mangroveCount} <span className="text-xs font-normal text-slate-600 dark:text-slate-300">Poligon</span>
+                    {stats.mangroveCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Poligon</span>
                   </div>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">Warna: Forest (#1B5E20)</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#1B5E20' }} />
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Hijau Tua (#1B5E20)</span>
+                  </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <div className="flex items-center gap-2 mb-1 text-amber-500">
+                {/* Lapangan Olahraga */}
+                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5 mb-1 text-amber-600 dark:text-amber-400">
                     <Activity className="w-4 h-4" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       Lapangan Olahraga
                     </span>
                   </div>
                   <div className="text-lg font-bold text-slate-900 dark:text-white">
-                    {stats.olahragaCount} <span className="text-xs font-normal text-slate-600 dark:text-slate-300">Poligon</span>
+                    {stats.olahragaCount} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Poligon</span>
                   </div>
-                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">Warna: Oranye (#FFA502)</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="w-2.5 h-2.5 rounded-xs" style={{ backgroundColor: '#FFA502' }} />
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Oranye (#FFA502)</span>
+                  </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <div className="flex items-center gap-2 mb-1 text-teal-600 dark:text-teal-400">
+                {/* Total Luas RTH */}
+                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5 mb-1 text-slate-700 dark:text-slate-300">
                     <Building2 className="w-4 h-4" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                      Total Poligon RTH
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                      Total Luas RTH
                     </span>
                   </div>
                   <div className="text-lg font-bold text-slate-900 dark:text-white">
-                    {stats.tamanCount + stats.mangroveCount + stats.olahragaCount}{' '}
-                    <span className="text-xs font-normal text-slate-600 dark:text-slate-300">Area</span>
+                    {stats.totalAreaHa} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">Ha</span>
                   </div>
-                  <span className="text-[10px] text-teal-700 dark:text-teal-300 font-medium">Gerbangkertosusila</span>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1">
+                    Wilayah Inti & Pesisir
+                  </span>
                 </div>
               </div>
 
-              {/* Collaborative Context Info */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 text-xs space-y-2">
+              {/* Batasan Wilayah Note Card */}
+              <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
                 <h4 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                  Tentang Tata Ruang Aglomerasi
+                  <span className="w-2 h-2 rounded-full bg-slate-600 dark:bg-slate-400"></span>
+                  Batasan Spasial Gerbangkertosusila
                 </h4>
                 <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11.5px]">
-                  Kawasan Gerbangkertosusila merupakan pusat aglomerasi ekonomi dan industri Jawa Timur. Pemetaan tematik RTH membantu pemantauan koridor ekologis pesisir, pengendalian intrusi air laut, serta pemenuhan ruang publik terbuka bagi masyarakat.
+                  Peta spasial ini telah difilter secara ketat agar hanya me-render poligon di dalam 6 wilayah metropolitan (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan) untuk memastikan kecepatan render dan akurasi batas wilayah.
                 </p>
-                <div className="pt-1 text-[11px] text-slate-600 dark:text-slate-300">
-                  Sumber data spasial: QGIS Spatial Layer & OpenStreetMap (OSM) Contributors.
+                <div className="pt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  Sesuai RTRW Aglomerasi Jawa Timur & OpenStreetMap Contributors.
                 </div>
               </div>
             </div>
@@ -347,50 +379,50 @@ export default function Home() {
           {activeTab === 'locations' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Pintasan Lokasi Ikonik
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Pintasan Titik Ikonik
                 </span>
-                <span className="text-[10px] text-slate-600 dark:text-slate-300">Klik untuk terbang ke titik</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">Pilih untuk zoom</span>
               </div>
 
-              {/* Filter pills */}
+              {/* Filter Buttons - Flat, solid styling */}
               <div className="flex gap-1.5 overflow-x-auto pb-1 text-[11px]">
                 <button
                   onClick={() => setActiveCategoryFilter('all')}
-                  className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     activeCategoryFilter === 'all'
-                      ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
-                  Semua
+                  Semua ({PRESET_LOCATIONS.length})
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('taman')}
-                  className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     activeCategoryFilter === 'taman'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
                   Taman
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('mangrove')}
-                  className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     activeCategoryFilter === 'mangrove'
                       ? 'bg-[#1B5E20] text-white'
-                      : 'bg-emerald-900/10 text-emerald-950 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
                   Mangrove
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('olahraga')}
-                  className={`px-2.5 py-1 rounded-full font-medium transition-colors ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     activeCategoryFilter === 'olahraga'
                       ? 'bg-amber-600 text-white'
-                      : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
                   Olahraga
@@ -403,11 +435,11 @@ export default function Home() {
                   <button
                     key={idx}
                     onClick={() => handleFlyTo(item.coords)}
-                    className="w-full text-left p-2.5 rounded-lg bg-slate-50 hover:bg-emerald-50/70 dark:bg-slate-800/60 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-slate-800 transition-all flex items-center justify-between group"
+                    className="w-full text-left p-2.5 rounded-lg bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-between group"
                   >
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        className="w-2.5 h-2.5 rounded-xs flex-shrink-0"
                         style={{
                           backgroundColor:
                             item.category === 'taman'
@@ -421,10 +453,10 @@ export default function Home() {
                         <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 leading-tight">
                           {item.name}
                         </h4>
-                        <span className="text-[10px] text-slate-600 dark:text-slate-300">{item.kabKota}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">{item.kabKota}</span>
                       </div>
                     </div>
-                    <MapPin className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-700 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -434,15 +466,15 @@ export default function Home() {
           {/* TAB 3: TIM PELAKSANA */}
           {activeTab === 'team' && (
             <div className="space-y-3.5">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-0.5">
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block mb-0.5">
                   Kolaborator Proyek
                 </span>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Tim Studio GIS & Perencanaan Wilayah Kota
+                  Studio GIS & Perencanaan Wilayah Kota
                 </h4>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                  Proyek Pemetaan Tematik Kawasan Metropolitan Gerbangkertosusila Berbasis WebGIS Terbuka.
+                  Penyusunan Pemetaan Tematik RTH Aglomerasi Gerbangkertosusila.
                 </p>
               </div>
 
@@ -450,59 +482,59 @@ export default function Home() {
                 {TEAM_MEMBERS.map((member, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between shadow-xs"
+                    className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                      <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 flex items-center justify-center font-bold text-xs">
                         {member.name.charAt(0)}
                       </div>
                       <div>
                         <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">
                           {member.name}
                         </h5>
-                        <span className="text-[11px] text-slate-600 dark:text-slate-300 block">{member.role}</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">{member.role}</span>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-600">
                       {member.nim}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 flex-shrink-0" />
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                <ExternalLink className="w-4 h-4 flex-shrink-0 text-slate-500" />
                 <span>Terhubung dengan GitHub Repository & Vercel Deployment</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-center text-[10.5px] text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-slate-900/80">
+        {/* Sidebar Footer - Clean solid bar */}
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-center text-[10.5px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900">
           <span>WebGIS RTH Metropolitan Gerbangkertosusila &copy; 2026</span>
         </div>
       </aside>
 
-      {/* SIDEBAR TOGGLE BUTTON (DESKTOP & MOBILE) */}
+      {/* SIDEBAR TOGGLE BUTTON - Clean solid styling */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className={`absolute top-4 z-30 p-2.5 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-slate-200/80 dark:border-slate-800 shadow-lg text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all ${
+        className={`absolute top-4 z-30 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-md text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all ${
           isSidebarOpen ? 'left-[390px] md:left-[422px]' : 'left-4'
         }`}
         aria-label="Toggle Sidebar"
         title={isSidebarOpen ? 'Sembunyikan Panel' : 'Buka Panel Informasi'}
       >
         {isSidebarOpen ? (
-          <ChevronLeft className="w-5 h-5 hidden md:block" />
+          <ChevronLeft className="w-4 h-4 hidden md:block" />
         ) : (
-          <ChevronRight className="w-5 h-5 hidden md:block" />
+          <ChevronRight className="w-4 h-4 hidden md:block" />
         )}
-        <Menu className="w-5 h-5 md:hidden" />
+        <Menu className="w-4 h-4 md:hidden" />
       </button>
 
       {/* RIGHT MAIN MAP VIEW CONTAINER */}
-      <section className="flex-1 h-full w-full relative overflow-hidden bg-slate-200 dark:bg-slate-900">
+      <section className="flex-1 h-full w-full relative overflow-hidden bg-slate-100 dark:bg-slate-900">
         <MapWrapper
           flyToCoord={selectedCoord}
           onDataLoaded={(data) => {
