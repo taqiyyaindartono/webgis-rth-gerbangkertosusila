@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -10,7 +10,6 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import type { GeoJsonObject, Feature } from 'geojson';
 
 // Fix Leaflet default marker icons issue in Next.js bundler
@@ -24,21 +23,21 @@ if (typeof window !== 'undefined') {
 }
 
 // Bounding box strictly limiting the map to Gerbangkertosusila
-// (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan)
+// (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan + Bawean)
 const GERBANGKERTOSUSILA_BOUNDS: L.LatLngBoundsExpression = [
-  [-7.82, 112.02], // Barat Daya (Selatan Mojokerto & Barat Lamongan)
-  [-6.80, 113.20], // Timur Laut (Timur Bangkalan & Utara Lamongan/Gresik)
+  [-7.85, 112.02], // Barat Daya (Selatan Mojokerto & Barat Lamongan)
+  [-5.75, 113.20], // Timur Laut (Utara Bawean Gresik & Timur Bangkalan)
 ];
 
-const DEFAULT_CENTER: [number, number] = [-7.30, 112.72];
+const DEFAULT_CENTER: [number, number] = [-7.28, 112.72];
 const DEFAULT_ZOOM = 11;
-const MIN_ZOOM = 10;
+const MIN_ZOOM = 9;
 const MAX_ZOOM = 18;
 
-// Thematic Style Constants based on Requirements
+// Thematic Style Constants - matching the previous colors + cemetery
 const THEMATIC_STYLES = {
   taman: {
-    fillColor: '#2ECC71', // Lime / Hijau Cerah
+    fillColor: '#2ECC71', // Lime / Hijau Cerah (Taman Kota, Alun-Alun, Meadow)
     color: '#333333',
     weight: 1,
     opacity: 1,
@@ -46,7 +45,7 @@ const THEMATIC_STYLES = {
     label: 'Taman Kota & Alun-Alun',
   },
   mangrove: {
-    fillColor: '#1B5E20', // Forest Green / Hijau Tua
+    fillColor: '#1B5E20', // Forest Green / Hijau Tua (Hutan Lindung & Mangrove)
     color: '#333333',
     weight: 1,
     opacity: 1,
@@ -54,12 +53,20 @@ const THEMATIC_STYLES = {
     label: 'Hutan Kota & Mangrove',
   },
   olahraga: {
-    fillColor: '#FFA502', // Oranye / Kuning Kehijauan
+    fillColor: '#FFA502', // Oranye / Kuning Kehijauan (Lapangan Olahraga & Rekreasi)
     color: '#333333',
     weight: 1,
     opacity: 1,
     fillOpacity: 0.65,
-    label: 'Lapangan Olahraga',
+    label: 'Lapangan Olahraga & Rekreasi',
+  },
+  pemakaman: {
+    fillColor: '#0D9488', // Teal / Pirus (RTH Pemakaman Publik)
+    color: '#333333',
+    weight: 1,
+    opacity: 1,
+    fillOpacity: 0.65,
+    label: 'RTH Pemakaman',
   },
   hover: {
     weight: 2.5,
@@ -67,6 +74,35 @@ const THEMATIC_STYLES = {
     fillOpacity: 0.85,
   },
 };
+
+// Helper to determine Regency / City based on coordinates
+function detectKabupatenKota(coords: number[][][] | number[][][][]): string {
+  try {
+    const flat = coords.flat(Infinity) as number[];
+    if (flat.length < 2) return 'Gerbangkertosusila';
+    let sumLng = 0, sumLat = 0, count = 0;
+    for (let i = 0; i < flat.length; i += 2) {
+      sumLng += flat[i];
+      sumLat += flat[i + 1];
+      count++;
+    }
+    const lng = sumLng / count;
+    const lat = sumLat / count;
+
+    if (lat > -6.0) return 'Kabupaten Gresik (Kep. Bawean)';
+    if (lng >= 112.68 && lat >= -7.20 && lat <= -6.85) return 'Kabupaten Bangkalan';
+    if (lat >= -7.36 && lat <= -7.18 && lng >= 112.60 && lng <= 112.85) return 'Kota Surabaya';
+    if (lat < -7.34 && lat >= -7.60 && lng >= 112.53 && lng <= 112.88) return 'Kabupaten Sidoarjo';
+    if (lat < -7.35 && lng < 112.63) {
+      if (lat >= -7.49 && lat <= -7.45 && lng >= 112.41 && lng <= 112.46) return 'Kota Mojokerto';
+      return 'Kabupaten Mojokerto';
+    }
+    if (lng <= 112.52) return 'Kabupaten Lamongan';
+    return 'Kabupaten Gresik';
+  } catch {
+    return 'Gerbangkertosusila';
+  }
+}
 
 // Helper to calculate approximate polygon area in Hectares
 function calculateFeatureAreaHa(feat: Feature): number {
@@ -133,7 +169,54 @@ function MapAutoResizer() {
   return null;
 }
 
-// Map controller helper to handle programmatic fly-to
+// Regency / City coordinate and zoom viewpoints
+export const REGENCY_VIEW_CONFIG: Record<
+  string,
+  { label: string; center: [number, number]; zoom: number }
+> = {
+  all: {
+    label: 'Semua Wilayah Gerbangkertosusila',
+    center: DEFAULT_CENTER,
+    zoom: DEFAULT_ZOOM,
+  },
+  'Kota Surabaya': {
+    label: 'Kota Surabaya',
+    center: [-7.265, 112.74],
+    zoom: 12,
+  },
+  'Kabupaten Sidoarjo': {
+    label: 'Kabupaten Sidoarjo',
+    center: [-7.45, 112.71],
+    zoom: 12,
+  },
+  'Kabupaten Gresik': {
+    label: 'Kabupaten Gresik',
+    center: [-7.16, 112.63],
+    zoom: 11,
+  },
+  'Kota Mojokerto': {
+    label: 'Kota Mojokerto',
+    center: [-7.47, 112.43],
+    zoom: 14,
+  },
+  'Kabupaten Mojokerto': {
+    label: 'Kabupaten Mojokerto',
+    center: [-7.55, 112.48],
+    zoom: 11,
+  },
+  'Kabupaten Lamongan': {
+    label: 'Kabupaten Lamongan',
+    center: [-7.12, 112.35],
+    zoom: 11,
+  },
+  'Kabupaten Bangkalan': {
+    label: 'Kabupaten Bangkalan',
+    center: [-7.04, 112.82],
+    zoom: 11,
+  },
+};
+
+// Map controller helper to handle programmatic fly-to for preset locations
 function MapFlyToHandler({ target }: { target: [number, number] | null }) {
   const map = useMap();
   useEffect(() => {
@@ -144,16 +227,32 @@ function MapFlyToHandler({ target }: { target: [number, number] | null }) {
   return null;
 }
 
+// Map controller helper to handle programmatic fly-to for regency selection
+function MapFlyToRegency({ regency }: { regency: string }) {
+  const map = useMap();
+  useEffect(() => {
+    const config = REGENCY_VIEW_CONFIG[regency];
+    if (config) {
+      map.flyTo(config.center, config.zoom, { duration: 1.1 });
+    }
+  }, [regency, map]);
+  return null;
+}
+
 // Quick Reset Center Control button
-function MapResetControl() {
+function MapResetControl({ onReset }: { onReset?: () => void }) {
   const map = useMap();
   return (
-    <div className="leaflet-top leaflet-left" style={{ marginTop: '80px', pointerEvents: 'auto' }}>
+    <div className="leaflet-top leaflet-left" style={{ marginTop: '74px', pointerEvents: 'auto' }}>
       <div className="leaflet-control leaflet-bar shadow-xs border border-slate-300 dark:border-slate-700">
         <button
-          onClick={() => map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1 })}
-          title="Pusatkan Peta ke Gerbangkertosusila"
-          className="w-8 h-8 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-colors"
+          onClick={() => {
+            map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1 });
+            if (onReset) onReset();
+          }}
+          title="Pusatkan Peta ke Seluruh Gerbangkertosusila"
+          className="w-8 h-8 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-colors"
+          aria-label="Pusatkan Peta"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -172,68 +271,97 @@ function MapResetControl() {
 export interface LeafletMapProps {
   onFeatureSelect?: (properties: Record<string, unknown>) => void;
   flyToCoord?: [number, number] | null;
+  selectedRegency?: string;
+  onResetRegency?: () => void;
   onDataLoaded?: (data: {
     tamanCount: number;
     mangroveCount: number;
     olahragaCount: number;
+    pemakamanCount: number;
     totalAreaHa: number;
+  }) => void;
+  onFilteredStatsChange?: (stats: {
+    tamanCount: number;
+    mangroveCount: number;
+    olahragaCount: number;
+    pemakamanCount: number;
+    totalAreaHa: number;
+    totalCount: number;
+    regencyName: string;
   }) => void;
 }
 
 export default function LeafletMap({
   onFeatureSelect,
   flyToCoord = null,
+  selectedRegency = 'all',
+  onResetRegency,
   onDataLoaded,
+  onFilteredStatsChange,
 }: LeafletMapProps) {
-  const [tamanData, setTamanData] = useState<GeoJsonObject | null>(null);
-  const [mangroveData, setMangroveData] = useState<GeoJsonObject | null>(null);
-  const [olahragaData, setOlahragaData] = useState<GeoJsonObject | null>(null);
+  const [rawTaman, setRawTaman] = useState<Feature[]>([]);
+  const [rawMangrove, setRawMangrove] = useState<Feature[]>([]);
+  const [rawOlahraga, setRawOlahraga] = useState<Feature[]>([]);
+  const [rawPemakaman, setRawPemakaman] = useState<Feature[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fetch GeoJSON datasets asynchronously
+  // Fetch the comprehensive merged dataset asynchronously
   useEffect(() => {
     let isMounted = true;
 
-    async function loadAllGeoJson() {
+    async function loadMergedGeoJson() {
       try {
-        const [resTaman, resMangrove, resOlahraga] = await Promise.all([
-          fetch('/data/taman_kota.geojson'),
-          fetch('/data/hutan_mangrove.geojson'),
-          fetch('/data/lapangan_olahraga.geojson'),
-        ]);
-
-        if (!resTaman.ok || !resMangrove.ok || !resOlahraga.ok) {
-          throw new Error('Gagal mengambil satu atau beberapa data spasial GeoJSON');
+        const res = await fetch('/data/rth_gerbangkertosusila_lengkap.geojson');
+        if (!res.ok) {
+          throw new Error('Gagal mengambil file data spasial rth_gerbangkertosusila_lengkap.geojson');
         }
 
-        const dataTaman = await resTaman.json();
-        const dataMangrove = await resMangrove.json();
-        const dataOlahraga = await resOlahraga.json();
+        const fullData = await res.json();
+        const allFeatures: Feature[] = fullData.features || [];
+
+        // Partition into 4 thematic collections
+        const tamanFeats: Feature[] = [];
+        const mangroveFeats: Feature[] = [];
+        const olahragaFeats: Feature[] = [];
+        const pemakamanFeats: Feature[] = [];
+
+        allFeatures.forEach((feat) => {
+          const kat = feat.properties?.kategori;
+          if (kat === 'mangrove') {
+            mangroveFeats.push(feat);
+          } else if (kat === 'olahraga') {
+            olahragaFeats.push(feat);
+          } else if (kat === 'pemakaman') {
+            pemakamanFeats.push(feat);
+          } else {
+            tamanFeats.push(feat);
+          }
+        });
 
         if (isMounted) {
-          setTamanData(dataTaman);
-          setMangroveData(dataMangrove);
-          setOlahragaData(dataOlahraga);
+          setRawTaman(tamanFeats);
+          setRawMangrove(mangroveFeats);
+          setRawOlahraga(olahragaFeats);
+          setRawPemakaman(pemakamanFeats);
 
-          // Calculate statistics for sidebar indicators
           if (onDataLoaded) {
-            const getFeatures = (geo: { features?: Feature[] }) => geo?.features || [];
-            const tamanFeats = getFeatures(dataTaman);
-            const mangroveFeats = getFeatures(dataMangrove);
-            const olahragaFeats = getFeatures(dataOlahraga);
-
             const calculateTotalArea = (feats: Feature[]) =>
-              feats.reduce((acc, f) => acc + calculateFeatureAreaHa(f), 0);
+              feats.reduce((acc, f) => {
+                const ha = typeof f.properties?.luas_ha === 'number' ? f.properties.luas_ha : calculateFeatureAreaHa(f);
+                return acc + ha;
+              }, 0);
 
             const totalHa =
               calculateTotalArea(tamanFeats) +
               calculateTotalArea(mangroveFeats) +
-              calculateTotalArea(olahragaFeats);
+              calculateTotalArea(olahragaFeats) +
+              calculateTotalArea(pemakamanFeats);
 
             onDataLoaded({
               tamanCount: tamanFeats.length,
               mangroveCount: mangroveFeats.length,
               olahragaCount: olahragaFeats.length,
+              pemakamanCount: pemakamanFeats.length,
               totalAreaHa: Math.round(totalHa * 10) / 10,
             });
           }
@@ -246,122 +374,142 @@ export default function LeafletMap({
       }
     }
 
-    loadAllGeoJson();
+    loadMergedGeoJson();
 
     return () => {
       isMounted = false;
     };
   }, [onDataLoaded]);
 
+  // Helper to check if a feature belongs to the currently selected regency
+  const isMatchRegency = useCallback(
+    (f: Feature) => {
+      if (!selectedRegency || selectedRegency === 'all') return true;
+      const kk = (f.properties?.kab_kota as string) || '';
+      if (selectedRegency === 'Kabupaten Gresik') {
+        return kk.includes('Gresik');
+      }
+      return kk === selectedRegency;
+    },
+    [selectedRegency]
+  );
+
+  // Dynamic filtered layers based on selected regency
+  const tamanData = useMemo(() => {
+    const feats = rawTaman.filter(isMatchRegency);
+    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
+  }, [rawTaman, isMatchRegency]);
+
+  const mangroveData = useMemo(() => {
+    const feats = rawMangrove.filter(isMatchRegency);
+    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
+  }, [rawMangrove, isMatchRegency]);
+
+  const olahragaData = useMemo(() => {
+    const feats = rawOlahraga.filter(isMatchRegency);
+    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
+  }, [rawOlahraga, isMatchRegency]);
+
+  const pemakamanData = useMemo(() => {
+    const feats = rawPemakaman.filter(isMatchRegency);
+    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
+  }, [rawPemakaman, isMatchRegency]);
+
+  // Keep latest onFilteredStatsChange in a ref to avoid infinite re-render cycles
+  const onFilteredStatsChangeRef = useRef(onFilteredStatsChange);
+  useEffect(() => {
+    onFilteredStatsChangeRef.current = onFilteredStatsChange;
+  }, [onFilteredStatsChange]);
+
+  // Notify parent of updated statistics whenever regency filter changes
+  useEffect(() => {
+    if (!onFilteredStatsChangeRef.current || rawTaman.length === 0) return;
+
+    const tFeats = rawTaman.filter(isMatchRegency);
+    const mFeats = rawMangrove.filter(isMatchRegency);
+    const oFeats = rawOlahraga.filter(isMatchRegency);
+    const pFeats = rawPemakaman.filter(isMatchRegency);
+
+    const calcArea = (feats: Feature[]) =>
+      feats.reduce((acc, f) => {
+        const ha = typeof f.properties?.luas_ha === 'number' ? f.properties.luas_ha : calculateFeatureAreaHa(f);
+        return acc + ha;
+      }, 0);
+
+    const totalHa = calcArea(tFeats) + calcArea(mFeats) + calcArea(oFeats) + calcArea(pFeats);
+
+    onFilteredStatsChangeRef.current({
+      tamanCount: tFeats.length,
+      mangroveCount: mFeats.length,
+      olahragaCount: oFeats.length,
+      pemakamanCount: pFeats.length,
+      totalAreaHa: Math.round(totalHa * 10) / 10,
+      totalCount: tFeats.length + mFeats.length + oFeats.length + pFeats.length,
+      regencyName: REGENCY_VIEW_CONFIG[selectedRegency]?.label || 'Semua Wilayah',
+    });
+  }, [selectedRegency, rawTaman, rawMangrove, rawOlahraga, rawPemakaman, isMatchRegency]);
+
   // Clean, professional popup card structure
   const createPopupContent = useCallback(
     (
       props: Record<string, unknown>,
       theme: { fillColor: string; label: string },
-      areaHa: number
+      areaHa: number,
+      kabKota: string
     ) => {
-      const rawName =
-        (props.name as string) ||
-        (props.short_name as string) ||
-        (props.alt_name as string) ||
-        (props['name:id'] as string) ||
-        (props['name:en'] as string);
+      const rawName = (props.name as string)?.trim();
+      const fclass = (props.fclass as string) || '';
+      const code = props.code || '';
+      const osmId = props.osm_id || props.fid || '-';
 
       let name = rawName;
       if (!name) {
-        if (props.leisure) {
-          const l = String(props.leisure).replace(/_/g, ' ');
-          name = `Area ${l.charAt(0).toUpperCase() + l.slice(1)}`;
-        } else if (props.natural) {
-          const n = String(props.natural).replace(/_/g, ' ');
-          name = `Kawasan ${n.charAt(0).toUpperCase() + n.slice(1)}`;
-        } else if (props.landuse) {
-          const lu = String(props.landuse).replace(/_/g, ' ');
-          name = `Zona ${lu.charAt(0).toUpperCase() + lu.slice(1)}`;
-        } else {
-          name = `${theme.label}`;
-        }
+        if (fclass === 'forest') name = 'Kawasan Hutan / Mangrove RTH';
+        else if (fclass === 'park') name = 'Taman Kota / Ruang Terbuka Hijau';
+        else if (fclass === 'cemetery') name = 'RTH Pemakaman Publik';
+        else if (fclass === 'grass') name = 'Lapangan Terbuka Hijau';
+        else if (fclass === 'recreation_ground') name = 'Fasilitas Olahraga & Rekreasi Publik';
+        else if (fclass === 'meadow') name = 'Padang Terbuka Alami';
+        else if (fclass === 'allotments') name = 'Kebun Komunitas RTH';
+        else name = theme.label;
       }
 
-      const kategori = (props.kategori as string) || theme.label;
-
-      const osmTags: string[] = [];
-      if (props.leisure) osmTags.push(`leisure=${props.leisure}`);
-      if (props.landuse) osmTags.push(`landuse=${props.landuse}`);
-      if (props.natural) osmTags.push(`natural=${props.natural}`);
-      if (props.sport) osmTags.push(`sport=${props.sport}`);
-      if (props.wetland) osmTags.push(`wetland=${props.wetland}`);
-      if (props.wood) osmTags.push(`wood=${props.wood}`);
-      const osmTag =
-        osmTags.length > 0
-          ? osmTags.join(', ')
-          : (props.osm_tag as string) || `osm_id=${props.osm_id || props.full_id || '-'}`;
-
-      const kabKota =
-        (props.kab_kota as string) ||
-        (props['addr:city'] as string) ||
-        (props['addr:district'] as string) ||
-        'Gerbangkertosusila';
-
-      const kecamatan =
-        (props.kecamatan as string) ||
-        (props['addr:subdistrict'] as string) ||
-        (props['addr:street'] as string) ||
-        '-';
-
+      const kategori = theme.label;
       const displayLuas = areaHa > 0 ? `${areaHa} Ha` : '-';
-      const status = (props.status as string) || (props.access ? `Akses: ${props.access}` : 'Publik / Terbuka');
-      const pengelola =
-        (props.pengelola as string) ||
-        (props.operator as string) ||
-        (props['operator:type'] as string) ||
-        'Pemerintah Daerah / Pengelola';
-
-      let fasilitas = (props.fasilitas as string) || '';
-      if (!fasilitas) {
-        const details: string[] = [];
-        if (props.sport) details.push(`Fasilitas: ${props.sport}`);
-        if (props.surface) details.push(`Permukaan: ${props.surface}`);
-        if (props.description) details.push(String(props.description));
-        fasilitas = details.length > 0 ? details.join(', ') : 'Ruang Terbuka Hijau Publik';
-      }
+      const osmTag = `fclass=${fclass || 'park'}${code ? `, code=${code}` : ''}`;
 
       return `
-        <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 240px; max-width: 320px; padding: 2px;">
+        <div style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; min-width: 240px; max-width: 300px; padding: 2px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="width: 9px; height: 9px; border-radius: 2px; background-color: ${theme.fillColor}; display: inline-block;"></span>
-              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: #334155;">${kategori}</span>
+              <span style="width: 8px; height: 8px; border-radius: 50%; background-color: ${theme.fillColor}; display: inline-block;"></span>
+              <span style="font-size: 11px; font-weight: 600; color: #334155;">${kategori}</span>
             </div>
-            <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #f1f5f9; color: #475569; font-weight: 600; border: 1px solid #e2e8f0;">${kabKota}</span>
+            <span style="font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #f8fafc; color: #475569; font-weight: 500; border: 1px solid #e2e8f0;">${kabKota}</span>
           </div>
 
-          <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0; line-height: 1.3;">${name}</h3>
+          <h3 style="font-size: 13px; font-weight: 600; color: #0f172a; margin: 0 0 6px 0; line-height: 1.35;">${name}</h3>
 
           <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #475569;">
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #64748b;">Lokasi / Wilayah:</span>
-              <span style="font-weight: 600; color: #1e293b; text-align: right; max-width: 170px;">${kecamatan}</span>
+              <span style="color: #64748b;">Wilayah:</span>
+              <span style="font-weight: 500; color: #1e293b; text-align: right; max-width: 170px;">${kabKota}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #64748b;">Estimasi Luas:</span>
-              <span style="font-weight: 700; color: #15803d;">${displayLuas}</span>
+              <span style="color: #64748b;">Estimasi luas:</span>
+              <span style="font-weight: 600; font-family: monospace; color: #15803d;">${displayLuas}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #64748b;">Status Akses:</span>
-              <span style="font-weight: 500; color: #1e293b;">${status}</span>
+              <span style="color: #64748b;">Klasifikasi:</span>
+              <span style="font-weight: 500; color: #1e293b;">${fclass || 'RTH Publik'}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
-              <span style="color: #64748b;">Pengelola:</span>
-              <span style="font-weight: 500; color: #1e293b; text-align: right; max-width: 170px;">${pengelola}</span>
+              <span style="color: #64748b;">Status:</span>
+              <span style="font-weight: 500; color: #1e293b;">Aktif terpetakan</span>
             </div>
             <div style="margin-top: 4px; padding-top: 5px; border-top: 1px solid #f1f5f9;">
-              <span style="color: #64748b; display: block; font-size: 10px; margin-bottom: 2px;">Fasilitas / Fungsi:</span>
-              <span style="font-size: 11px; color: #334155; line-height: 1.3;">${fasilitas}</span>
-            </div>
-            <div style="margin-top: 3px; padding-top: 3px;">
-              <span style="color: #94a3b8; font-size: 9.5px; display: block;">OSM Tag:</span>
-              <code style="display: inline-block; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 1px 4px; border-radius: 3px; font-size: 9.5px; color: #334155; margin-top: 2px; word-break: break-all;">${osmTag}</code>
+              <span style="color: #94a3b8; font-size: 10px; display: block;">Identitas spasial:</span>
+              <code style="display: inline-block; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 1px 4px; border-radius: 3px; font-size: 9.5px; color: #334155; margin-top: 2px; word-break: break-all;">${osmTag} (id:${osmId})</code>
             </div>
           </div>
         </div>
@@ -385,9 +533,17 @@ export default function LeafletMap({
       }
     ) => {
       const props = (feature.properties || {}) as Record<string, unknown>;
-      const areaHa = calculateFeatureAreaHa(feature);
+      const areaHa = (typeof props.luas_ha === 'number' && props.luas_ha > 0)
+        ? props.luas_ha
+        : calculateFeatureAreaHa(feature);
+      const kabKota = (props.kab_kota as string)
+        || detectKabupatenKota(
+            feature.geometry?.type === 'Polygon' || feature.geometry?.type === 'MultiPolygon'
+              ? (feature.geometry.coordinates as unknown as number[][][])
+              : []
+          );
 
-      const popupHtml = createPopupContent(props, defaultStyle, areaHa);
+      const popupHtml = createPopupContent(props, defaultStyle, areaHa, kabKota);
       layer.bindPopup(popupHtml, {
         maxWidth: 330,
         className: 'custom-leaflet-popup',
@@ -449,7 +605,8 @@ export default function LeafletMap({
       >
         <MapAutoResizer />
         <MapFlyToHandler target={flyToCoord} />
-        <MapResetControl />
+        <MapFlyToRegency regency={selectedRegency} />
+        <MapResetControl onReset={onResetRegency} />
         <ScaleControl position="bottomleft" imperial={false} />
 
         {/* 3 Basemaps & Overlays Layer Control */}
@@ -482,11 +639,11 @@ export default function LeafletMap({
             />
           </LayersControl.BaseLayer>
 
-          {/* Overlay 1: Taman Kota & Alun-Alun */}
+          {/* Overlay 1: Taman Kota & Alun-Alun (#2ECC71 - Lime) */}
           <LayersControl.Overlay checked name="Taman Kota & Alun-Alun">
             {tamanData ? (
               <GeoJSON
-                key="layer-taman"
+                key={`layer-taman-${selectedRegency}`}
                 data={tamanData}
                 style={() => ({
                   fillColor: THEMATIC_STYLES.taman.fillColor,
@@ -502,11 +659,11 @@ export default function LeafletMap({
             ) : null}
           </LayersControl.Overlay>
 
-          {/* Overlay 2: Hutan Kota & Mangrove */}
+          {/* Overlay 2: Hutan Kota & Mangrove (#1B5E20 - Forest Green) */}
           <LayersControl.Overlay checked name="Hutan Kota & Mangrove">
             {mangroveData ? (
               <GeoJSON
-                key="layer-mangrove"
+                key={`layer-mangrove-${selectedRegency}`}
                 data={mangroveData}
                 style={() => ({
                   fillColor: THEMATIC_STYLES.mangrove.fillColor,
@@ -522,11 +679,11 @@ export default function LeafletMap({
             ) : null}
           </LayersControl.Overlay>
 
-          {/* Overlay 3: Lapangan Olahraga */}
-          <LayersControl.Overlay checked name="Lapangan Olahraga">
+          {/* Overlay 3: Lapangan Olahraga & Rekreasi (#FFA502 - Oranye) */}
+          <LayersControl.Overlay checked name="Lapangan Olahraga & Rekreasi">
             {olahragaData ? (
               <GeoJSON
-                key="layer-olahraga"
+                key={`layer-olahraga-${selectedRegency}`}
                 data={olahragaData}
                 style={() => ({
                   fillColor: THEMATIC_STYLES.olahraga.fillColor,
@@ -541,17 +698,37 @@ export default function LeafletMap({
               />
             ) : null}
           </LayersControl.Overlay>
+
+          {/* Overlay 4: RTH Pemakaman (#0D9488 - Teal) */}
+          <LayersControl.Overlay checked name="RTH Pemakaman">
+            {pemakamanData ? (
+              <GeoJSON
+                key={`layer-pemakaman-${selectedRegency}`}
+                data={pemakamanData}
+                style={() => ({
+                  fillColor: THEMATIC_STYLES.pemakaman.fillColor,
+                  color: THEMATIC_STYLES.pemakaman.color,
+                  weight: THEMATIC_STYLES.pemakaman.weight,
+                  opacity: THEMATIC_STYLES.pemakaman.opacity,
+                  fillOpacity: THEMATIC_STYLES.pemakaman.fillOpacity,
+                })}
+                onEachFeature={(feat, layer) =>
+                  bindFeatureEvents(feat, layer, THEMATIC_STYLES.pemakaman)
+                }
+              />
+            ) : null}
+          </LayersControl.Overlay>
         </LayersControl>
       </MapContainer>
 
       {/* Map Legend Overlay Component - Clean Solid Cartographic Box */}
-      <div className="absolute bottom-5 right-5 z-[900] bg-white dark:bg-slate-900 p-3 rounded-lg shadow-md border border-slate-300 dark:border-slate-800 pointer-events-auto max-w-[250px]">
+      <div className="absolute bottom-5 right-5 z-[900] bg-white dark:bg-slate-900 p-3 rounded-lg shadow-md border border-slate-300 dark:border-slate-800 pointer-events-auto max-w-[260px]">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-800">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-700 dark:bg-emerald-500"></span>
             Legenda Tematik RTH
           </span>
-          <span className="text-[10px] text-slate-500 font-mono">ATR/BPN 14/22</span>
+          <span className="text-[10px] text-slate-500 font-mono">Permen ATR 14/22</span>
         </div>
 
         <div className="space-y-2 text-xs">
@@ -565,7 +742,7 @@ export default function LeafletMap({
               <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.taman.label}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Taman & alun-alun publik</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Taman aktif & alun-alun publik</span>
             </div>
           </div>
 
@@ -579,7 +756,7 @@ export default function LeafletMap({
               <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.mangrove.label}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Sabuk hijau & mangrove</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Hutan lindung & mangrove</span>
             </div>
           </div>
 
@@ -593,14 +770,28 @@ export default function LeafletMap({
               <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
                 {THEMATIC_STYLES.olahraga.label}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Stadion & lapangan terbuka</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Lapangan, stadion & rekreasi</span>
+            </div>
+          </div>
+
+          {/* RTH Pemakaman */}
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
+              style={{ backgroundColor: THEMATIC_STYLES.pemakaman.fillColor, opacity: 0.85 }}
+            />
+            <div className="flex flex-col">
+              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
+                {THEMATIC_STYLES.pemakaman.label}
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Pemakaman umum & pahlawan</span>
             </div>
           </div>
         </div>
 
         <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
           <span>* Batas: Gerbangkertosusila</span>
-          <span>Klik poligon: Detail</span>
+          <span>Klik poligon: Info</span>
         </div>
       </div>
     </div>
