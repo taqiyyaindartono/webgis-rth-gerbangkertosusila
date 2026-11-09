@@ -329,6 +329,28 @@ function matchPresetRegency(presetKabKota: string, targetRegency: string): boole
   return true;
 }
 
+// Regency quick navigation chips
+const REGENCY_CHIPS = [
+  { id: 'all', shortName: 'Semua', count: '3.735' },
+  { id: 'Kota Surabaya', shortName: 'Surabaya', count: '1.360' },
+  { id: 'Kabupaten Sidoarjo', shortName: 'Sidoarjo', count: '280' },
+  { id: 'Kabupaten Gresik', shortName: 'Gresik', count: '61' },
+  { id: 'Kabupaten Mojokerto', shortName: 'Mojokerto', count: '1.644' },
+  { id: 'Kabupaten Lamongan', shortName: 'Lamongan', count: '321' },
+  { id: 'Kabupaten Bangkalan', shortName: 'Bangkalan', count: '54' },
+];
+
+// 6 Metropolitan Agglomeration Regions Distribution
+const METRO_DISTRIBUTION = [
+  { id: 'Kota Surabaya', name: 'Kota Surabaya', count: 1360, share: '36,4%', note: 'Pusat metropolitan inti' },
+  { id: 'Kabupaten Mojokerto', name: 'Kabupaten Mojokerto', count: 1644, share: '44,0%', note: 'Kawasan konservasi & hutan' },
+  { id: 'Kabupaten Lamongan', name: 'Kabupaten Lamongan', count: 321, share: '8,6%', note: 'Koridor pantura & pesisir' },
+  { id: 'Kabupaten Sidoarjo', name: 'Kabupaten Sidoarjo', count: 280, share: '7,5%', note: 'Penyangga selatan bandara' },
+  { id: 'Kabupaten Gresik', name: 'Kabupaten Gresik', count: 61, share: '1,6%', note: 'Sabuk hijau industri' },
+  { id: 'Kabupaten Bangkalan', name: 'Kabupaten Bangkalan', count: 54, share: '1,4%', note: 'Gerbang kepulauan Madura' },
+  { id: 'Kota Mojokerto', name: 'Kota Mojokerto', count: 15, share: '0,4%', note: 'RTH perkotaan kompak' },
+];
+
 export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'locations' | 'team'>('overview');
@@ -336,12 +358,17 @@ export default function Home() {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<'all' | 'alun-alun' | 'taman' | 'mangrove' | 'olahraga'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegency, setSelectedRegency] = useState<string>('all');
+  const [showRegulationInfo, setShowRegulationInfo] = useState(false);
 
   const [regencyStats, setRegencyStats] = useState({
     tamanCount: 1876,
     mangroveCount: 951,
     olahragaCount: 730,
     pemakamanCount: 178,
+    tamanAreaHa: 29377.8,
+    mangroveAreaHa: 14923.0,
+    olahragaAreaHa: 11411.7,
+    pemakamanAreaHa: 2809.1,
     totalAreaHa: 58521.6,
     totalCount: 3735,
     regencyName: 'Semua Wilayah (Metropolitan)',
@@ -353,24 +380,22 @@ export default function Home() {
       mangroveCount: number;
       olahragaCount: number;
       pemakamanCount: number;
+      tamanAreaHa?: number;
+      mangroveAreaHa?: number;
+      olahragaAreaHa?: number;
+      pemakamanAreaHa?: number;
       totalAreaHa: number;
       totalCount: number;
       regencyName: string;
     }) => {
-      setRegencyStats((prev) => {
-        if (
-          prev.totalCount === newStats.totalCount &&
-          prev.totalAreaHa === newStats.totalAreaHa &&
-          prev.tamanCount === newStats.tamanCount &&
-          prev.mangroveCount === newStats.mangroveCount &&
-          prev.olahragaCount === newStats.olahragaCount &&
-          prev.pemakamanCount === newStats.pemakamanCount &&
-          prev.regencyName === newStats.regencyName
-        ) {
-          return prev;
-        }
-        return newStats;
-      });
+      setRegencyStats((prev) => ({
+        ...prev,
+        ...newStats,
+        tamanAreaHa: newStats.tamanAreaHa ?? prev.tamanAreaHa,
+        mangroveAreaHa: newStats.mangroveAreaHa ?? prev.mangroveAreaHa,
+        olahragaAreaHa: newStats.olahragaAreaHa ?? prev.olahragaAreaHa,
+        pemakamanAreaHa: newStats.pemakamanAreaHa ?? prev.pemakamanAreaHa,
+      }));
     },
     []
   );
@@ -417,34 +442,24 @@ export default function Home() {
 
       {/* LEFT SIDEBAR - Solid, flat, professional cartographic styling */}
       <aside
-        className={`fixed md:relative z-40 h-full w-[85vw] sm:w-[380px] md:w-[420px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-lg md:shadow-none transition-transform duration-250 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-ml-[420px]'
+        className={`fixed md:relative z-40 h-full w-[85vw] sm:w-[360px] md:w-[360px] flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-200 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-ml-[360px]'
         }`}
       >
-        {/* Studio Cartographic Header */}
-        <header className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-3">
+        {/* Solid Cartographic Sidebar Header */}
+        <header className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-950/20 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold shadow-2xs">
-                <Compass className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono tracking-wider font-semibold text-emerald-700 dark:text-emerald-400">
-                    GERBANGKERTOSUSILA RTH
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
-                <h1 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                  Atlas Ruang Terbuka Hijau
-                </h1>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 ring-3 ring-emerald-500/20" />
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                WebGIS Gerbangkertosusila
+              </span>
             </div>
 
-            {/* Close button */}
+            {/* Close button inside sidebar */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label="Tutup Sidebar"
               title="Sembunyikan Panel"
             >
@@ -452,305 +467,301 @@ export default function Home() {
             </button>
           </div>
 
-          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            Sistem Informasi Geografis spasial tematik RTH terpadu 6 wilayah metropolitan: Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, dan Lamongan.
-          </p>
+          <div>
+            <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+              Atlas Ruang Terbuka Hijau
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal mt-0.5">
+              Inventarisasi spasial 6 wilayah metropolitan: Surabaya, Sidoarjo, Gresik, Mojokerto, Lamongan, dan Bangkalan.
+            </p>
+          </div>
 
-          {/* Telemetry Datum Strip */}
-          <div className="flex items-center justify-between text-[11px] font-mono py-1.5 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>WGS 84</span>
-            </div>
-            <span className="text-slate-300 dark:text-slate-700">|</span>
-            <div className="tabular-nums font-medium text-slate-800 dark:text-slate-200">
-              {regencyStats.totalCount.toLocaleString('id-ID')} Poligon
-            </div>
-            <span className="text-slate-300 dark:text-slate-700">|</span>
-            <div className="tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-              {regencyStats.totalAreaHa.toLocaleString('id-ID')} Ha
-            </div>
+          {/* Clean Telemetry Strip (No heavy grid boxes) */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+            <span className="tabular-nums font-medium text-slate-700 dark:text-slate-300">
+              {regencyStats.totalCount.toLocaleString('id-ID')} poligon
+            </span>
+            <span>&bull;</span>
+            <span className="tabular-nums font-medium text-slate-700 dark:text-slate-300">
+              {regencyStats.totalAreaHa.toLocaleString('id-ID')} ha
+            </span>
+            <span>&bull;</span>
+            <span>WGS 84</span>
           </div>
         </header>
 
-        {/* Regency Spatial Selector */}
-        <div className="px-4 py-3 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="regency-select" className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              Wilayah observasi
-            </label>
+        {/* Regency Spatial Selector with Quick Filter Chips */}
+        <div className="px-4 py-3 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              Wilayah Observasi
+            </span>
             {selectedRegency !== 'all' && (
               <button
                 onClick={() => setSelectedRegency('all')}
-                className="text-xs text-emerald-700 dark:text-emerald-400 hover:underline font-mono cursor-pointer"
+                className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
               >
                 Tampilkan semua
               </button>
             )}
           </div>
-          <div className="relative">
-            <select
-              id="regency-select"
-              value={selectedRegency}
-              onChange={(e) => setSelectedRegency(e.target.value)}
-              className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-xs rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium cursor-pointer transition-colors shadow-2xs appearance-none"
-            >
-              <option value="all">Semua Wilayah (Metropolitan - 3.735 Poligon)</option>
-              <option value="Kota Surabaya">Kota Surabaya (1.360 Poligon)</option>
-              <option value="Kabupaten Sidoarjo">Kabupaten Sidoarjo (280 Poligon)</option>
-              <option value="Kabupaten Gresik">Kabupaten Gresik (61 Poligon)</option>
-              <option value="Kota Mojokerto">Kota Mojokerto (15 Poligon)</option>
-              <option value="Kabupaten Mojokerto">Kabupaten Mojokerto (1.644 Poligon)</option>
-              <option value="Kabupaten Lamongan">Kabupaten Lamongan (321 Poligon)</option>
-              <option value="Kabupaten Bangkalan">Kabupaten Bangkalan (54 Poligon)</option>
-            </select>
-            <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-3 rotate-90 text-slate-400 pointer-events-none" />
+
+          {/* Quick Regency Filter Chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {REGENCY_CHIPS.map((chip) => {
+              const isActive = selectedRegency === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  onClick={() => setSelectedRegency(chip.id)}
+                  className={`px-2 py-1 rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-medium shadow-xs'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  <span>{chip.shortName}</span>
+                  <span
+                    className={`font-mono text-[10px] tabular-nums ${
+                      isActive
+                        ? 'text-slate-300 dark:text-slate-600'
+                        : 'text-slate-400 dark:text-slate-500'
+                    }`}
+                  >
+                    {chip.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Studio Navigation Tabs */}
-        <div className="flex p-1.5 mx-4 my-3 bg-slate-100 dark:bg-slate-800/80 rounded-lg border border-slate-200/80 dark:border-slate-800 text-xs">
+        {/* Studio Navigation Tabs - Slim Underline Style */}
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-4 text-xs bg-white dark:bg-slate-900">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex-1 py-1.5 px-2 rounded-md font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
               activeTab === 'overview'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <Info className="w-3.5 h-3.5" />
             Ringkasan
           </button>
           <button
             onClick={() => setActiveTab('locations')}
-            className={`flex-1 py-1.5 px-2 rounded-md font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
               activeTab === 'locations'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <MapPin className="w-3.5 h-3.5" />
             Pintasan ({filteredPresets.length})
           </button>
           <button
             onClick={() => setActiveTab('team')}
-            className={`flex-1 py-1.5 px-2 rounded-md font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
               activeTab === 'team'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            Tim
+            Metadata &amp; Tim
           </button>
         </div>
 
         {/* Sidebar Content (Scrollable) */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-          {/* TAB 1: OVERVIEW & STATISTIK */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4 pt-3">
+          {/* TAB 1: OVERVIEW & SPATIAL ANALYTICS */}
           {activeTab === 'overview' && (
             <div className="space-y-4">
-              {/* Moment 1: Master Segmented Spatial Distribution Bar */}
-              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              {/* 1. Komposisi Kategori RTH */}
+              <section className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-3.5 h-3.5 text-slate-500" />
-                    <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                      Distribusi Proporsi Spasial
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
+                  <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Komposisi Kategori RTH
+                  </h2>
+                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[140px]">
                     {regencyStats.regencyName}
                   </span>
                 </div>
 
-                {/* Segmented Horizontal Bar */}
-                <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-100 dark:bg-slate-800 shadow-inner">
+                {/* Stacked Horizontal Bar */}
+                <div className="w-full h-2 rounded-xs overflow-hidden flex bg-slate-100 dark:bg-slate-800">
                   <div style={{ width: `${pTaman}%`, backgroundColor: '#2ECC71' }} title={`Taman: ${pTaman}%`} />
-                  <div style={{ width: `${pMangrove}%`, backgroundColor: '#1B5E20' }} title={`Mangrove: ${pMangrove}%`} />
+                  <div style={{ width: `${pMangrove}%`, backgroundColor: '#1B5E20' }} title={`Mangrove & Hutan: ${pMangrove}%`} />
                   <div style={{ width: `${pOlahraga}%`, backgroundColor: '#FFA502' }} title={`Olahraga: ${pOlahraga}%`} />
                   <div style={{ width: `${pPemakaman}%`, backgroundColor: '#0D9488' }} title={`Pemakaman: ${pPemakaman}%`} />
                 </div>
 
-                {/* Proportional Grid Legend */}
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#2ECC71' }} />
-                      <span className="text-slate-600 dark:text-slate-300 font-sans truncate">Taman Kota</span>
+                {/* Tabular Metric List */}
+                <div className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {/* Taman */}
+                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#2ECC71' }} />
+                      <span className="text-slate-700 dark:text-slate-300 truncate">Taman Kota &amp; Alun-Alun</span>
                     </div>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums ml-1">{pTaman}%</span>
+                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
+                      <span className="text-slate-400 tabular-nums">{regencyStats.tamanCount.toLocaleString('id-ID')} obj</span>
+                      <span className="text-slate-400 tabular-nums">{regencyStats.tamanAreaHa.toLocaleString('id-ID')} Ha</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pTaman}%</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#1B5E20' }} />
-                      <span className="text-slate-600 dark:text-slate-300 font-sans truncate">Hutan/Mangrove</span>
+                  {/* Mangrove */}
+                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#1B5E20' }} />
+                      <span className="text-slate-700 dark:text-slate-300 truncate">Hutan Kota &amp; Mangrove</span>
                     </div>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums ml-1">{pMangrove}%</span>
+                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
+                      <span className="text-slate-400 tabular-nums">{regencyStats.mangroveCount.toLocaleString('id-ID')} obj</span>
+                      <span className="text-slate-400 tabular-nums">{regencyStats.mangroveAreaHa.toLocaleString('id-ID')} Ha</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pMangrove}%</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#FFA502' }} />
-                      <span className="text-slate-600 dark:text-slate-300 font-sans truncate">Olahraga</span>
+                  {/* Olahraga */}
+                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#FFA502' }} />
+                      <span className="text-slate-700 dark:text-slate-300 truncate">Lapangan Olahraga</span>
                     </div>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums ml-1">{pOlahraga}%</span>
+                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
+                      <span className="text-slate-400 tabular-nums">{regencyStats.olahragaCount.toLocaleString('id-ID')} obj</span>
+                      <span className="text-slate-400 tabular-nums">{regencyStats.olahragaAreaHa.toLocaleString('id-ID')} Ha</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pOlahraga}%</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#0D9488' }} />
-                      <span className="text-slate-600 dark:text-slate-300 font-sans truncate">Pemakaman</span>
+                  {/* Pemakaman */}
+                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#0D9488' }} />
+                      <span className="text-slate-700 dark:text-slate-300 truncate">RTH Pemakaman</span>
                     </div>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums ml-1">{pPemakaman}%</span>
+                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
+                      <span className="text-slate-400 tabular-nums">{regencyStats.pemakamanCount.toLocaleString('id-ID')} obj</span>
+                      <span className="text-slate-400 tabular-nums">{regencyStats.pemakamanAreaHa.toLocaleString('id-ID')} Ha</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pPemakaman}%</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Moment 2: Regulatory 20% Mandate Benchmark Card */}
-              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
-                      <Award className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                      Tolok Ukur Mandat UU 26/2007
+              {/* 2. Tolok Ukur Mandat UU 26/2007 */}
+              <section className="p-3 rounded border border-slate-200 dark:border-slate-800 space-y-2 bg-slate-50/60 dark:bg-slate-900/40">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      Mandat UU 26/2007
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowRegulationInfo(!showRegulationInfo)}
+                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                      title={showRegulationInfo ? 'Tutup info regulasi' : 'Buka detail regulasi'}
+                      aria-label="Info regulasi"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                    Min. 20% Publik
+                  <span className="text-[10px] font-mono font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                    Target Min. 20% Publik
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Pasal 29 UU Penataan Ruang & Permen ATR/BPN No. 14/2022 mewajibkan proporsi RTH publik paling sedikit 20% dari luas wilayah perkotaan aglomerasi.
-                </p>
-
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-500 dark:text-slate-400">Status spasial terpetakan:</span>
-                    <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                      {regencyStats.totalCount.toLocaleString('id-ID')} Poligon ({regencyStats.totalAreaHa.toLocaleString('id-ID')} Ha)
-                    </span>
-                  </div>
-                  <div className="relative w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-600 dark:bg-emerald-500 rounded-full transition-all duration-300" style={{ width: '85%' }} />
-                  </div>
-                  <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-                    <span>0%</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ambang 20% Terpenuhi</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Statistics Grid - 4 Category Cards */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Taman Kota */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-slate-700 dark:text-slate-300">
-                    <Trees className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      Taman kota
-                    </span>
-                  </div>
-                  <div className="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-                    {regencyStats.tamanCount.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans">poligon</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#2ECC71' }} />
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">#2ECC71</span>
-                  </div>
-                </div>
-
-                {/* Mangrove & Hutan */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-slate-700 dark:text-slate-300">
-                    <Layers className="w-4 h-4 text-emerald-800 dark:text-emerald-300" />
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      Mangrove & hutan
-                    </span>
-                  </div>
-                  <div className="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-                    {regencyStats.mangroveCount.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans">poligon</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#1B5E20' }} />
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">#1B5E20</span>
-                  </div>
-                </div>
-
-                {/* Fasilitas Olahraga */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-slate-700 dark:text-slate-300">
-                    <Activity className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      Fasilitas olahraga
-                    </span>
-                  </div>
-                  <div className="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-                    {regencyStats.olahragaCount.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans">poligon</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#FFA502' }} />
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">#FFA502</span>
-                  </div>
-                </div>
-
-                {/* RTH Pemakaman */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-slate-700 dark:text-slate-300">
-                    <Landmark className="w-4 h-4 text-teal-700 dark:text-teal-400" />
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                      RTH pemakaman
-                    </span>
-                  </div>
-                  <div className="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-                    {regencyStats.pemakamanCount.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans">poligon</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#0D9488' }} />
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">#0D9488</span>
-                  </div>
-                </div>
-
-                {/* Total Luas RTH - Full Width (col-span-2) */}
-                <div className="col-span-2 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-0.5 text-slate-700 dark:text-slate-300">
-                      <Building2 className="w-4 h-4 text-slate-500" />
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                        Total Luas RTH Terpetakan
+                {showRegulationInfo && (
+                  <div className="p-2.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <div className="flex items-start justify-between gap-1.5 mb-1">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100 text-[11px]">
+                        Dasar Regulasi:
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRegulationInfo(false)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-1 cursor-pointer"
+                        title="Tutup"
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {selectedRegency === 'all' ? 'Cakupan 6 Wilayah Aglomerasi' : `Wilayah ${selectedRegency}`}
-                    </span>
+                    <p>
+                      Pasal 29 UU Penataan Ruang &amp; Permen ATR/BPN No. 14/2022 mewajibkan proporsi RTH publik paling sedikit 20% dari luas kawasan perkotaan aglomerasi.
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-                      {regencyStats.totalAreaHa.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500 dark:text-slate-400 font-sans">Ha</span>
-                    </div>
-                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium font-mono">
-                      {regencyStats.totalAreaHa.toLocaleString('id-ID')} hektare
-                    </span>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {/* Spatial Specification Card */}
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
-                <div className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>Spesifikasi Geospasial Aglomerasi</span>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-500 dark:text-slate-400">Capaian Terpetakan</span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
+                      24,2% <span className="font-normal text-slate-400">(+4,2% di atas ambang)</span>
+                    </span>
+                  </div>
+                  <div className="relative w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-xs overflow-hidden">
+                    <div className="h-full bg-slate-800 dark:bg-slate-200 rounded-xs" style={{ width: '80%' }} />
+                    <div className="absolute top-0 bottom-0 left-[66%] w-0.5 bg-red-500" title="Ambang Batas Minimum 20%" />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                    <span>0%</span>
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">Batas Min. 20%</span>
+                    <span>30% Target Total</span>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Batas spasial ketat mencakup 6 kabupaten/kota inti Jawa Timur: Gresik, Bangkalan, Mojokerto (Kota & Kab), Surabaya, Sidoarjo, dan Lamongan sesuai tata ruang RTRW Provinsi Jawa Timur.
-                </p>
-              </div>
+              </section>
+
+              {/* 3. Sebaran 6 Wilayah Metropolitan (Replacing redundant cards) */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Sebaran Wilayah Metropolitan
+                  </h2>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Klik untuk fokus
+                  </span>
+                </div>
+
+                <div className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  {METRO_DISTRIBUTION.map((reg) => {
+                    const isSelected = selectedRegency === reg.id;
+                    return (
+                      <button
+                        key={reg.id}
+                        onClick={() => setSelectedRegency(reg.id)}
+                        className={`w-full flex items-center justify-between p-2 text-left transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-100 dark:bg-slate-800 font-medium'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                isSelected ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
+                              }`}
+                            />
+                            <span className="text-slate-800 dark:text-slate-200 truncate font-medium">
+                              {reg.name}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block pl-3 truncate">
+                            {reg.note}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500 flex-shrink-0">
+                          <span className="tabular-nums">{reg.count.toLocaleString('id-ID')} obj</span>
+                          <span className="tabular-nums text-slate-400">({reg.share})</span>
+                          <ChevronRight className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             </div>
           )}
 
@@ -766,7 +777,7 @@ export default function Home() {
                     {filteredPresets.length} dari {PRESET_LOCATIONS.length} lokasi
                   </span>
                 </div>
-                <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                   6 daerah
                 </span>
               </div>
@@ -779,7 +790,7 @@ export default function Home() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari nama taman, stadion, kawasan..."
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-colors shadow-2xs"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-colors"
                 />
                 {searchQuery && (
                   <button
@@ -792,13 +803,13 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Category Filter Pills */}
-              <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
+              {/* Category Filter Buttons */}
+              <div className="flex gap-1 overflow-x-auto pb-1 text-xs">
                 <button
                   onClick={() => setActiveCategoryFilter('all')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'all'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
@@ -806,9 +817,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('alun-alun')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeCategoryFilter === 'alun-alun'
-                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
@@ -817,9 +828,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('taman')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeCategoryFilter === 'taman'
-                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
@@ -828,9 +839,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('mangrove')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeCategoryFilter === 'mangrove'
-                      ? 'bg-[#1B5E20] text-white shadow-2xs'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
@@ -839,9 +850,9 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('olahraga')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeCategoryFilter === 'olahraga'
-                      ? 'bg-amber-600 text-white shadow-2xs'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
                   }`}
                 >
@@ -851,9 +862,9 @@ export default function Home() {
               </div>
 
               {/* Locations List with Coordinates */}
-              <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto pr-0.5">
+              <div className="space-y-1.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-0.5">
                 {filteredPresets.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+                  <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-md">
                     Tidak ditemukan lokasi yang cocok dengan kata kunci &quot;{searchQuery}&quot;
                   </div>
                 ) : (
@@ -861,11 +872,11 @@ export default function Home() {
                     <button
                       key={idx}
                       onClick={() => handleFlyTo(item.coords)}
-                      className="w-full text-left p-3 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 transition-colors flex items-center justify-between group cursor-pointer shadow-2xs"
+                      className="w-full text-left p-2.5 rounded-md bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 transition-colors flex items-center justify-between group cursor-pointer"
                     >
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-start gap-2.5 min-w-0">
                         <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1"
+                          className="w-2 h-2 rounded-xs flex-shrink-0 mt-1"
                           style={{
                             backgroundColor:
                               item.category === 'alun-alun'
@@ -878,7 +889,7 @@ export default function Home() {
                           }}
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors leading-snug truncate">
+                          <h4 className="text-xs font-medium text-slate-800 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white transition-colors leading-snug truncate">
                             {item.name}
                           </h4>
                           <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
@@ -889,14 +900,14 @@ export default function Home() {
                             </span>
                           </div>
                           {item.badge && (
-                            <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                            <div className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500 truncate">
                               {item.badge}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-2 flex-shrink-0">
-                        <span className="text-[11px] font-mono">Buka</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-700 dark:text-slate-200 text-xs font-medium ml-2 flex-shrink-0">
+                        <span className="text-[10px] font-mono">Buka</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </div>
                     </button>
@@ -908,15 +919,15 @@ export default function Home() {
 
           {/* TAB 3: TIM PELAKSANA */}
           {activeTab === 'team' && (
-            <div className="space-y-3.5">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400 block mb-0.5">
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 block mb-0.5">
                   Kolaborator Proyek
                 </span>
                 <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                   Studio GIS & Perencanaan Wilayah Kota
                 </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Penyusunan Pemetaan Tematik RTH Aglomerasi Gerbangkertosusila.
                 </p>
               </div>
@@ -925,28 +936,28 @@ export default function Home() {
                 {TEAM_MEMBERS.map((member, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between shadow-2xs"
+                    className="p-2.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-medium text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-medium text-xs">
                         {member.name === 'Unknown' ? '?' : member.name.charAt(0)}
                       </div>
                       <div>
                         <h5 className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-tight">
                           {member.name}
                         </h5>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block">{member.role}</span>
+                        <span className="text-[11px] text-slate-400 block">{member.role}</span>
                       </div>
                     </div>
-                    <span className="text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                    <span className="text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                       {member.nim}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 flex-shrink-0 text-slate-500" />
+              <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <ExternalLink className="w-4 h-4 flex-shrink-0 text-slate-400" />
                 <span>Terhubung dengan GitHub Repository & Vercel Deployment</span>
               </div>
             </div>
@@ -954,27 +965,22 @@ export default function Home() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-900/60 font-mono">
+        <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] text-slate-400 bg-slate-50/70 dark:bg-slate-900/60 font-mono">
           <span>WebGIS RTH Metropolitan Gerbangkertosusila &copy; 2026</span>
         </div>
       </aside>
 
-      {/* SIDEBAR TOGGLE BUTTON - Clean solid styling with precise spacing */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className={`absolute top-4 z-30 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-md text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-400 transition-all cursor-pointer ${
-          isSidebarOpen ? 'left-[400px] md:left-[434px]' : 'left-3.5'
-        }`}
-        aria-label="Toggle Sidebar"
-        title={isSidebarOpen ? 'Sembunyikan Panel Informasi' : 'Buka Panel Informasi'}
-      >
-        {isSidebarOpen ? (
-          <ChevronLeft className="w-4 h-4 hidden md:block" />
-        ) : (
-          <ChevronRight className="w-4 h-4 hidden md:block" />
-        )}
-        <Menu className="w-4 h-4 md:hidden" />
-      </button>
+      {/* SIDEBAR TOGGLE BUTTON - Only when sidebar is closed */}
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="absolute top-4 left-4 z-30 p-2 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          aria-label="Buka Sidebar"
+          title="Buka Panel Informasi"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
+      )}
 
       {/* RIGHT MAIN MAP VIEW CONTAINER */}
       <section className="flex-1 h-full w-full relative overflow-hidden bg-slate-100 dark:bg-slate-900">
@@ -983,23 +989,8 @@ export default function Home() {
           selectedRegency={selectedRegency}
           onResetRegency={() => setSelectedRegency('all')}
           onFilteredStatsChange={handleFilteredStatsChange}
+          isSidebarOpen={isSidebarOpen}
         />
-
-        {/* Floating Bottom Telemetry Bar */}
-        <div className="absolute bottom-3 left-24 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border border-slate-300 dark:border-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 shadow-sm pointer-events-auto">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="font-sans font-medium text-slate-800 dark:text-slate-200">
-            {selectedRegency === 'all' ? 'Kawasan Metropolitan' : selectedRegency}
-          </span>
-          <span className="text-slate-300 dark:text-slate-700">|</span>
-          <span className="tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-            {regencyStats.totalCount.toLocaleString('id-ID')} Poligon
-          </span>
-          <span className="text-slate-300 dark:text-slate-700">|</span>
-          <span className="text-slate-500 dark:text-slate-400">
-            {regencyStats.totalAreaHa.toLocaleString('id-ID')} Ha
-          </span>
-        </div>
       </section>
     </main>
   );

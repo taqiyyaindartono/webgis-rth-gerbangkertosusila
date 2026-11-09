@@ -5,12 +5,16 @@ import {
   MapContainer,
   TileLayer,
   GeoJSON,
-  LayersControl,
   ScaleControl,
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
 import type { GeoJsonObject, Feature } from 'geojson';
+import {
+  Layers,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 
 // Fix Leaflet default marker icons issue in Next.js bundler
 if (typeof window !== 'undefined') {
@@ -216,56 +220,36 @@ export const REGENCY_VIEW_CONFIG: Record<
   },
 };
 
-// Map controller helper to handle programmatic fly-to for preset locations
-function MapFlyToHandler({ target }: { target: [number, number] | null }) {
+// Map instance capture & programmatic fly-to controller
+function MapController({
+  onMapReady,
+  target,
+  regency,
+}: {
+  onMapReady: (map: L.Map) => void;
+  target: [number, number] | null;
+  regency: string;
+}) {
   const map = useMap();
+
+  useEffect(() => {
+    onMapReady(map);
+  }, [map, onMapReady]);
+
   useEffect(() => {
     if (target) {
       map.flyTo(target, 15, { duration: 1.2 });
     }
   }, [target, map]);
-  return null;
-}
 
-// Map controller helper to handle programmatic fly-to for regency selection
-function MapFlyToRegency({ regency }: { regency: string }) {
-  const map = useMap();
   useEffect(() => {
     const config = REGENCY_VIEW_CONFIG[regency];
     if (config) {
       map.flyTo(config.center, config.zoom, { duration: 1.1 });
     }
   }, [regency, map]);
-  return null;
-}
 
-// Quick Reset Center Control button
-function MapResetControl({ onReset }: { onReset?: () => void }) {
-  const map = useMap();
-  return (
-    <div className="leaflet-top leaflet-left" style={{ marginTop: '74px', pointerEvents: 'auto' }}>
-      <div className="leaflet-control leaflet-bar shadow-xs border border-slate-300 dark:border-slate-700">
-        <button
-          onClick={() => {
-            map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1 });
-            if (onReset) onReset();
-          }}
-          title="Pusatkan Peta ke Seluruh Gerbangkertosusila"
-          className="w-8 h-8 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-colors"
-          aria-label="Pusatkan Peta"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-            />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export interface LeafletMapProps {
@@ -285,10 +269,15 @@ export interface LeafletMapProps {
     mangroveCount: number;
     olahragaCount: number;
     pemakamanCount: number;
+    tamanAreaHa?: number;
+    mangroveAreaHa?: number;
+    olahragaAreaHa?: number;
+    pemakamanAreaHa?: number;
     totalAreaHa: number;
     totalCount: number;
     regencyName: string;
   }) => void;
+  isSidebarOpen?: boolean;
 }
 
 export default function LeafletMap({
@@ -298,12 +287,37 @@ export default function LeafletMap({
   onResetRegency,
   onDataLoaded,
   onFilteredStatsChange,
+  isSidebarOpen = true,
 }: LeafletMapProps) {
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [rawTaman, setRawTaman] = useState<Feature[]>([]);
   const [rawMangrove, setRawMangrove] = useState<Feature[]>([]);
   const [rawOlahraga, setRawOlahraga] = useState<Feature[]>([]);
   const [rawPemakaman, setRawPemakaman] = useState<Feature[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Basemap & Layer control state
+  const [activeBasemap, setActiveBasemap] = useState<'osm' | 'satellite' | 'positron'>('osm');
+  const [visibleLayers, setVisibleLayers] = useState({
+    taman: true,
+    mangrove: true,
+    olahraga: true,
+    pemakaman: true,
+  });
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
+  // Zoom Actions
+  const handleZoomIn = useCallback(() => {
+    if (mapInstance) {
+      mapInstance.zoomIn();
+    }
+  }, [mapInstance]);
+
+  const handleZoomOut = useCallback(() => {
+    if (mapInstance) {
+      mapInstance.zoomOut();
+    }
+  }, [mapInstance]);
 
   // Fetch the comprehensive merged dataset asynchronously
   useEffect(() => {
@@ -395,25 +409,26 @@ export default function LeafletMap({
   );
 
   // Dynamic filtered layers based on selected regency
+  const tamanFeatures = useMemo(() => rawTaman.filter(isMatchRegency), [rawTaman, isMatchRegency]);
+  const mangroveFeatures = useMemo(() => rawMangrove.filter(isMatchRegency), [rawMangrove, isMatchRegency]);
+  const olahragaFeatures = useMemo(() => rawOlahraga.filter(isMatchRegency), [rawOlahraga, isMatchRegency]);
+  const pemakamanFeatures = useMemo(() => rawPemakaman.filter(isMatchRegency), [rawPemakaman, isMatchRegency]);
+
   const tamanData = useMemo(() => {
-    const feats = rawTaman.filter(isMatchRegency);
-    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
-  }, [rawTaman, isMatchRegency]);
+    return tamanFeatures.length > 0 ? ({ type: 'FeatureCollection', features: tamanFeatures } as GeoJsonObject) : null;
+  }, [tamanFeatures]);
 
   const mangroveData = useMemo(() => {
-    const feats = rawMangrove.filter(isMatchRegency);
-    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
-  }, [rawMangrove, isMatchRegency]);
+    return mangroveFeatures.length > 0 ? ({ type: 'FeatureCollection', features: mangroveFeatures } as GeoJsonObject) : null;
+  }, [mangroveFeatures]);
 
   const olahragaData = useMemo(() => {
-    const feats = rawOlahraga.filter(isMatchRegency);
-    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
-  }, [rawOlahraga, isMatchRegency]);
+    return olahragaFeatures.length > 0 ? ({ type: 'FeatureCollection', features: olahragaFeatures } as GeoJsonObject) : null;
+  }, [olahragaFeatures]);
 
   const pemakamanData = useMemo(() => {
-    const feats = rawPemakaman.filter(isMatchRegency);
-    return feats.length > 0 ? ({ type: 'FeatureCollection', features: feats } as GeoJsonObject) : null;
-  }, [rawPemakaman, isMatchRegency]);
+    return pemakamanFeatures.length > 0 ? ({ type: 'FeatureCollection', features: pemakamanFeatures } as GeoJsonObject) : null;
+  }, [pemakamanFeatures]);
 
   // Keep latest onFilteredStatsChange in a ref to avoid infinite re-render cycles
   const onFilteredStatsChangeRef = useRef(onFilteredStatsChange);
@@ -425,10 +440,10 @@ export default function LeafletMap({
   useEffect(() => {
     if (!onFilteredStatsChangeRef.current || rawTaman.length === 0) return;
 
-    const tFeats = rawTaman.filter(isMatchRegency);
-    const mFeats = rawMangrove.filter(isMatchRegency);
-    const oFeats = rawOlahraga.filter(isMatchRegency);
-    const pFeats = rawPemakaman.filter(isMatchRegency);
+    const tFeats = tamanFeatures;
+    const mFeats = mangroveFeatures;
+    const oFeats = olahragaFeatures;
+    const pFeats = pemakamanFeatures;
 
     const calcArea = (feats: Feature[]) =>
       feats.reduce((acc, f) => {
@@ -436,14 +451,22 @@ export default function LeafletMap({
         return acc + ha;
       }, 0);
 
-    const totalHa = calcArea(tFeats) + calcArea(mFeats) + calcArea(oFeats) + calcArea(pFeats);
+    const tArea = Math.round(calcArea(tFeats) * 10) / 10;
+    const mArea = Math.round(calcArea(mFeats) * 10) / 10;
+    const oArea = Math.round(calcArea(oFeats) * 10) / 10;
+    const pArea = Math.round(calcArea(pFeats) * 10) / 10;
+    const totalHa = Math.round((tArea + mArea + oArea + pArea) * 10) / 10;
 
     onFilteredStatsChangeRef.current({
       tamanCount: tFeats.length,
       mangroveCount: mFeats.length,
       olahragaCount: oFeats.length,
       pemakamanCount: pFeats.length,
-      totalAreaHa: Math.round(totalHa * 10) / 10,
+      tamanAreaHa: tArea,
+      mangroveAreaHa: mArea,
+      olahragaAreaHa: oArea,
+      pemakamanAreaHa: pArea,
+      totalAreaHa: totalHa,
       totalCount: tFeats.length + mFeats.length + oFeats.length + pFeats.length,
       regencyName: REGENCY_VIEW_CONFIG[selectedRegency]?.label || 'Semua Wilayah',
     });
@@ -479,7 +502,7 @@ export default function LeafletMap({
       const osmTag = `fclass=${fclass || 'park'}${code ? `, code=${code}` : ''}`;
 
       return `
-        <div style="font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; min-width: 240px; max-width: 300px; padding: 2px;">
+        <div style="font-family: 'Inter', system-ui, -apple-system, sans-serif; min-width: 240px; max-width: 300px; padding: 2px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
             <div style="display: flex; align-items: center; gap: 6px;">
               <span style="width: 8px; height: 8px; border-radius: 50%; background-color: ${theme.fillColor}; display: inline-block;"></span>
@@ -600,199 +623,362 @@ export default function LeafletMap({
         maxBoundsViscosity={1.0}
         preferCanvas={true}
         scrollWheelZoom={true}
+        zoomControl={false}
         className="w-full h-full z-0 outline-none"
         style={{ width: '100%', height: '100%' }}
       >
         <MapAutoResizer />
-        <MapFlyToHandler target={flyToCoord} />
-        <MapFlyToRegency regency={selectedRegency} />
-        <MapResetControl onReset={onResetRegency} />
+        <MapController
+          onMapReady={setMapInstance}
+          target={flyToCoord}
+          regency={selectedRegency}
+        />
         <ScaleControl position="bottomleft" imperial={false} />
 
-        {/* 3 Basemaps & Overlays Layer Control */}
-        <LayersControl position="topright" collapsed={false}>
-          {/* Basemap 1: OpenStreetMap Standard (Default) */}
-          <LayersControl.BaseLayer checked name="OpenStreetMap Standard (Default)">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              maxZoom={19}
-            />
-          </LayersControl.BaseLayer>
+        {/* Dynamic Basemap Tile Layer */}
+        {activeBasemap === 'osm' && (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+          />
+        )}
+        {activeBasemap === 'satellite' && (
+          <TileLayer
+            attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+        )}
+        {activeBasemap === 'positron' && (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            subdomains="abcd"
+            maxZoom={20}
+          />
+        )}
 
-          {/* Basemap 2: Esri World Imagery (Satellite) */}
-          <LayersControl.BaseLayer name="Esri World Imagery (Satelit)">
-            <TileLayer
-              attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-          </LayersControl.BaseLayer>
+        {/* Overlay 1: Taman Kota & Alun-Alun (#2ECC71) */}
+        {visibleLayers.taman && tamanData ? (
+          <GeoJSON
+            key={`layer-taman-${selectedRegency}`}
+            data={tamanData}
+            style={() => ({
+              fillColor: THEMATIC_STYLES.taman.fillColor,
+              color: THEMATIC_STYLES.taman.color,
+              weight: THEMATIC_STYLES.taman.weight,
+              opacity: THEMATIC_STYLES.taman.opacity,
+              fillOpacity: THEMATIC_STYLES.taman.fillOpacity,
+            })}
+            onEachFeature={(feat, layer) =>
+              bindFeatureEvents(feat, layer, THEMATIC_STYLES.taman)
+            }
+          />
+        ) : null}
 
-          {/* Basemap 3: CartoDB Positron */}
-          <LayersControl.BaseLayer name="CartoDB Positron (Terang)">
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              subdomains="abcd"
-              maxZoom={20}
-            />
-          </LayersControl.BaseLayer>
+        {/* Overlay 2: Hutan Kota & Mangrove (#1B5E20) */}
+        {visibleLayers.mangrove && mangroveData ? (
+          <GeoJSON
+            key={`layer-mangrove-${selectedRegency}`}
+            data={mangroveData}
+            style={() => ({
+              fillColor: THEMATIC_STYLES.mangrove.fillColor,
+              color: THEMATIC_STYLES.mangrove.color,
+              weight: THEMATIC_STYLES.mangrove.weight,
+              opacity: THEMATIC_STYLES.mangrove.opacity,
+              fillOpacity: THEMATIC_STYLES.mangrove.fillOpacity,
+            })}
+            onEachFeature={(feat, layer) =>
+              bindFeatureEvents(feat, layer, THEMATIC_STYLES.mangrove)
+            }
+          />
+        ) : null}
 
-          {/* Overlay 1: Taman Kota & Alun-Alun (#2ECC71 - Lime) */}
-          <LayersControl.Overlay checked name="Taman Kota & Alun-Alun">
-            {tamanData ? (
-              <GeoJSON
-                key={`layer-taman-${selectedRegency}`}
-                data={tamanData}
-                style={() => ({
-                  fillColor: THEMATIC_STYLES.taman.fillColor,
-                  color: THEMATIC_STYLES.taman.color,
-                  weight: THEMATIC_STYLES.taman.weight,
-                  opacity: THEMATIC_STYLES.taman.opacity,
-                  fillOpacity: THEMATIC_STYLES.taman.fillOpacity,
-                })}
-                onEachFeature={(feat, layer) =>
-                  bindFeatureEvents(feat, layer, THEMATIC_STYLES.taman)
-                }
-              />
-            ) : null}
-          </LayersControl.Overlay>
+        {/* Overlay 3: Lapangan Olahraga & Rekreasi (#FFA502) */}
+        {visibleLayers.olahraga && olahragaData ? (
+          <GeoJSON
+            key={`layer-olahraga-${selectedRegency}`}
+            data={olahragaData}
+            style={() => ({
+              fillColor: THEMATIC_STYLES.olahraga.fillColor,
+              color: THEMATIC_STYLES.olahraga.color,
+              weight: THEMATIC_STYLES.olahraga.weight,
+              opacity: THEMATIC_STYLES.olahraga.opacity,
+              fillOpacity: THEMATIC_STYLES.olahraga.fillOpacity,
+            })}
+            onEachFeature={(feat, layer) =>
+              bindFeatureEvents(feat, layer, THEMATIC_STYLES.olahraga)
+            }
+          />
+        ) : null}
 
-          {/* Overlay 2: Hutan Kota & Mangrove (#1B5E20 - Forest Green) */}
-          <LayersControl.Overlay checked name="Hutan Kota & Mangrove">
-            {mangroveData ? (
-              <GeoJSON
-                key={`layer-mangrove-${selectedRegency}`}
-                data={mangroveData}
-                style={() => ({
-                  fillColor: THEMATIC_STYLES.mangrove.fillColor,
-                  color: THEMATIC_STYLES.mangrove.color,
-                  weight: THEMATIC_STYLES.mangrove.weight,
-                  opacity: THEMATIC_STYLES.mangrove.opacity,
-                  fillOpacity: THEMATIC_STYLES.mangrove.fillOpacity,
-                })}
-                onEachFeature={(feat, layer) =>
-                  bindFeatureEvents(feat, layer, THEMATIC_STYLES.mangrove)
-                }
-              />
-            ) : null}
-          </LayersControl.Overlay>
-
-          {/* Overlay 3: Lapangan Olahraga & Rekreasi (#FFA502 - Oranye) */}
-          <LayersControl.Overlay checked name="Lapangan Olahraga & Rekreasi">
-            {olahragaData ? (
-              <GeoJSON
-                key={`layer-olahraga-${selectedRegency}`}
-                data={olahragaData}
-                style={() => ({
-                  fillColor: THEMATIC_STYLES.olahraga.fillColor,
-                  color: THEMATIC_STYLES.olahraga.color,
-                  weight: THEMATIC_STYLES.olahraga.weight,
-                  opacity: THEMATIC_STYLES.olahraga.opacity,
-                  fillOpacity: THEMATIC_STYLES.olahraga.fillOpacity,
-                })}
-                onEachFeature={(feat, layer) =>
-                  bindFeatureEvents(feat, layer, THEMATIC_STYLES.olahraga)
-                }
-              />
-            ) : null}
-          </LayersControl.Overlay>
-
-          {/* Overlay 4: RTH Pemakaman (#0D9488 - Teal) */}
-          <LayersControl.Overlay checked name="RTH Pemakaman">
-            {pemakamanData ? (
-              <GeoJSON
-                key={`layer-pemakaman-${selectedRegency}`}
-                data={pemakamanData}
-                style={() => ({
-                  fillColor: THEMATIC_STYLES.pemakaman.fillColor,
-                  color: THEMATIC_STYLES.pemakaman.color,
-                  weight: THEMATIC_STYLES.pemakaman.weight,
-                  opacity: THEMATIC_STYLES.pemakaman.opacity,
-                  fillOpacity: THEMATIC_STYLES.pemakaman.fillOpacity,
-                })}
-                onEachFeature={(feat, layer) =>
-                  bindFeatureEvents(feat, layer, THEMATIC_STYLES.pemakaman)
-                }
-              />
-            ) : null}
-          </LayersControl.Overlay>
-        </LayersControl>
+        {/* Overlay 4: RTH Pemakaman (#0D9488) */}
+        {visibleLayers.pemakaman && pemakamanData ? (
+          <GeoJSON
+            key={`layer-pemakaman-${selectedRegency}`}
+            data={pemakamanData}
+            style={() => ({
+              fillColor: THEMATIC_STYLES.pemakaman.fillColor,
+              color: THEMATIC_STYLES.pemakaman.color,
+              weight: THEMATIC_STYLES.pemakaman.weight,
+              opacity: THEMATIC_STYLES.pemakaman.opacity,
+              fillOpacity: THEMATIC_STYLES.pemakaman.fillOpacity,
+            })}
+            onEachFeature={(feat, layer) =>
+              bindFeatureEvents(feat, layer, THEMATIC_STYLES.pemakaman)
+            }
+          />
+        ) : null}
       </MapContainer>
 
-      {/* Map Legend Overlay Component - Clean Solid Cartographic Box */}
-      <div className="absolute bottom-5 right-5 z-[900] bg-white dark:bg-slate-900 p-3 rounded-lg shadow-md border border-slate-300 dark:border-slate-800 pointer-events-auto max-w-[260px]">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 dark:border-slate-800">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-700 dark:bg-emerald-500"></span>
-            Legenda Tematik RTH
-          </span>
-          <span className="text-[10px] text-slate-500 font-mono">Permen ATR 14/22</span>
+      {/* Top-Left Technical GIS Navigation Controls (Zoom In, Zoom Out, Reset Center, North) */}
+      <div
+        className={`absolute z-[900] pointer-events-auto transition-all duration-200 ${
+          isSidebarOpen ? 'top-4 left-4' : 'top-16 left-4'
+        }`}
+      >
+        <div className="flex flex-col bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-md overflow-hidden">
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="w-8 h-8 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border-b border-slate-200 dark:border-slate-800 transition-colors cursor-pointer select-none"
+            title="Perbesar Peta (Zoom In)"
+            aria-label="Zoom in"
+          >
+            <span className="text-base font-semibold leading-none">+</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="w-8 h-8 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer select-none"
+            title="Perkecil Peta (Zoom Out)"
+            aria-label="Zoom out"
+          >
+            <span className="text-base font-semibold leading-none">&minus;</span>
+          </button>
         </div>
+      </div>
 
-        <div className="space-y-2 text-xs">
-          {/* Taman Kota */}
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
-              style={{ backgroundColor: THEMATIC_STYLES.taman.fillColor, opacity: 0.85 }}
-            />
-            <div className="flex flex-col">
-              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
-                {THEMATIC_STYLES.taman.label}
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Taman aktif & alun-alun publik</span>
+      {/* Top-Right Unified Collapsible "Layers & Legenda" Control */}
+      <div className="absolute top-4 right-4 z-[900] pointer-events-auto">
+        {isPanelCollapsed ? (
+          <button
+            onClick={() => setIsPanelCollapsed(false)}
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-md text-xs font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            title="Buka Panel Layers & Legenda"
+          >
+            <Layers className="w-4 h-4 text-slate-500" />
+            <span>Layers & Legenda</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              {Object.values(visibleLayers).filter(Boolean).length}/4
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+        ) : (
+          <div className="w-72 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-lg overflow-hidden text-xs">
+            {/* Panel Header */}
+            <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-slate-700 dark:text-slate-200" />
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  Layers & Legenda
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">
+                  ({Object.values(visibleLayers).filter(Boolean).length}/4)
+                </span>
+              </div>
+              <button
+                onClick={() => setIsPanelCollapsed(true)}
+                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                title="Ciutkan Panel"
+                aria-label="Ciutkan panel"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-3.5 max-h-[calc(100vh-140px)] overflow-y-auto">
+              {/* Section 1: Peta Dasar (Basemap Switcher) */}
+              <div>
+                <div className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                  Peta Dasar
+                </div>
+                <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => setActiveBasemap('osm')}
+                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                      activeBasemap === 'osm'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Standar
+                  </button>
+                  <button
+                    onClick={() => setActiveBasemap('satellite')}
+                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                      activeBasemap === 'satellite'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Satelit
+                  </button>
+                  <button
+                    onClick={() => setActiveBasemap('positron')}
+                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                      activeBasemap === 'positron'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    Positron
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 2: Lapisan Tematik RTH & Legenda Terpadu */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400">
+                    Lapisan Tematik & Legenda
+                  </span>
+                  <button
+                    onClick={() => {
+                      const allActive = Object.values(visibleLayers).every(Boolean);
+                      setVisibleLayers({
+                        taman: !allActive,
+                        mangrove: !allActive,
+                        olahraga: !allActive,
+                        pemakaman: !allActive,
+                      });
+                    }}
+                    className="text-[10px] font-mono text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    {Object.values(visibleLayers).every(Boolean) ? 'Nonaktifkan' : 'Aktifkan'}
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {/* Taman */}
+                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={visibleLayers.taman}
+                        onChange={(e) =>
+                          setVisibleLayers((prev) => ({ ...prev, taman: e.target.checked }))
+                        }
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                      />
+                      <span
+                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        style={{ backgroundColor: THEMATIC_STYLES.taman.fillColor }}
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                          {THEMATIC_STYLES.taman.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Taman kota & alun-alun</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                      {tamanFeatures.length.toLocaleString('id-ID')}
+                    </span>
+                  </label>
+
+                  {/* Mangrove */}
+                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={visibleLayers.mangrove}
+                        onChange={(e) =>
+                          setVisibleLayers((prev) => ({ ...prev, mangrove: e.target.checked }))
+                        }
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                      />
+                      <span
+                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        style={{ backgroundColor: THEMATIC_STYLES.mangrove.fillColor }}
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                          {THEMATIC_STYLES.mangrove.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Hutan lindung & mangrove</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                      {mangroveFeatures.length.toLocaleString('id-ID')}
+                    </span>
+                  </label>
+
+                  {/* Olahraga */}
+                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={visibleLayers.olahraga}
+                        onChange={(e) =>
+                          setVisibleLayers((prev) => ({ ...prev, olahraga: e.target.checked }))
+                        }
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                      />
+                      <span
+                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        style={{ backgroundColor: THEMATIC_STYLES.olahraga.fillColor }}
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                          {THEMATIC_STYLES.olahraga.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Lapangan & stadion</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                      {olahragaFeatures.length.toLocaleString('id-ID')}
+                    </span>
+                  </label>
+
+                  {/* Pemakaman */}
+                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={visibleLayers.pemakaman}
+                        onChange={(e) =>
+                          setVisibleLayers((prev) => ({ ...prev, pemakaman: e.target.checked }))
+                        }
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                      />
+                      <span
+                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        style={{ backgroundColor: THEMATIC_STYLES.pemakaman.fillColor }}
+                      />
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                          {THEMATIC_STYLES.pemakaman.label}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Pemakaman umum</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                      {pemakamanFeatures.length.toLocaleString('id-ID')}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Footer Acuan */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                <span>Permen ATR 14/2022</span>
+                <span>Klik poligon: Detail</span>
+              </div>
             </div>
           </div>
-
-          {/* Hutan Mangrove */}
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
-              style={{ backgroundColor: THEMATIC_STYLES.mangrove.fillColor, opacity: 0.85 }}
-            />
-            <div className="flex flex-col">
-              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
-                {THEMATIC_STYLES.mangrove.label}
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Hutan lindung & mangrove</span>
-            </div>
-          </div>
-
-          {/* Lapangan Olahraga */}
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
-              style={{ backgroundColor: THEMATIC_STYLES.olahraga.fillColor, opacity: 0.85 }}
-            />
-            <div className="flex flex-col">
-              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
-                {THEMATIC_STYLES.olahraga.label}
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Lapangan, stadion & rekreasi</span>
-            </div>
-          </div>
-
-          {/* RTH Pemakaman */}
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-4 h-3.5 rounded-sm border border-slate-700 flex-shrink-0"
-              style={{ backgroundColor: THEMATIC_STYLES.pemakaman.fillColor, opacity: 0.85 }}
-            />
-            <div className="flex flex-col">
-              <span className="text-slate-800 dark:text-slate-200 font-medium leading-none">
-                {THEMATIC_STYLES.pemakaman.label}
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Pemakaman umum & pahlawan</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
-          <span>* Batas: Gerbangkertosusila</span>
-          <span>Klik poligon: Info</span>
-        </div>
+        )}
       </div>
     </div>
   );
