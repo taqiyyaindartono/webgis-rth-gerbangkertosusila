@@ -9,7 +9,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import type { GeoJsonObject, Feature } from 'geojson';
+import type { GeoJsonObject, Feature, FeatureCollection } from 'geojson';
 import {
   Layers,
   ChevronDown,
@@ -295,10 +295,12 @@ export default function LeafletMap({
   const [rawMangrove, setRawMangrove] = useState<Feature[]>([]);
   const [rawOlahraga, setRawOlahraga] = useState<Feature[]>([]);
   const [rawPemakaman, setRawPemakaman] = useState<Feature[]>([]);
+  const [rawBoundaries, setRawBoundaries] = useState<FeatureCollection | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Basemap & Layer control state (Positron default for clean Apple Maps-style cartography)
   const [activeBasemap, setActiveBasemap] = useState<'osm' | 'satellite' | 'positron'>('positron');
+  const [showBoundaries, setShowBoundaries] = useState(true);
   const [visibleLayers, setVisibleLayers] = useState({
     taman: true,
     mangrove: true,
@@ -406,6 +408,21 @@ export default function LeafletMap({
     }
 
     loadMergedGeoJson();
+
+    async function loadBoundariesGeoJson() {
+      try {
+        const res = await fetch('/data/batas_gerbangkertosusila.geojson');
+        if (!res.ok) return;
+        const data: FeatureCollection = await res.json();
+        if (isMounted) {
+          setRawBoundaries(data);
+        }
+      } catch (err) {
+        console.warn('Gagal memuat batas administrasi:', err);
+      }
+    }
+
+    loadBoundariesGeoJson();
 
     return () => {
       isMounted = false;
@@ -676,6 +693,39 @@ export default function LeafletMap({
             maxZoom={20}
           />
         )}
+
+        {/* Administrative Boundaries (7 Kab/Kota Gerbangkertosusila) */}
+        {showBoundaries && rawBoundaries ? (
+          <GeoJSON
+            key={`layer-boundaries-${selectedRegency}-${activeBasemap}`}
+            data={rawBoundaries}
+            interactive={false}
+            style={(feature) => {
+              const name = feature?.properties?.name as string | undefined;
+              const isAll = !selectedRegency || selectedRegency === 'all';
+              const isSelected = !isAll && name === selectedRegency;
+              const isDarkBasemap = activeBasemap === 'satellite';
+
+              if (isSelected) {
+                return {
+                  color: '#007aff',
+                  weight: 2,
+                  opacity: 0.9,
+                  fillColor: '#007aff',
+                  fillOpacity: 0.035,
+                };
+              }
+
+              return {
+                color: isDarkBasemap ? '#e5e7eb' : '#6e6e73',
+                weight: isAll ? 1.25 : 0.85,
+                opacity: isAll ? (isDarkBasemap ? 0.5 : 0.45) : 0.2,
+                dashArray: '4 4',
+                fillOpacity: 0,
+              };
+            }}
+          />
+        ) : null}
 
         {/* Overlay 1: Taman Kota & Alun-Alun (#2ECC71) */}
         {visibleLayers.taman && tamanData ? (
@@ -993,6 +1043,30 @@ export default function LeafletMap({
                     </div>
                     <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
                       {pemakamanFeatures.length.toLocaleString('id-ID')}
+                    </span>
+                  </label>
+
+                  {/* Batas Administrasi */}
+                  <label className="flex items-center justify-between py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] rounded-[6px] px-1 -mx-1 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={showBoundaries}
+                        onChange={(e) => setShowBoundaries(e.target.checked)}
+                        className="rounded border-black/20 accent-[#007aff] cursor-pointer"
+                      />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-dashed border-[#6e6e73] dark:border-[#98989d]"
+                      />
+                      <div>
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
+                          Batas Administrasi
+                        </div>
+                        <div className="text-[10px] text-[#86868b]">Batas Kab/Kota wilayah</div>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                      7
                     </span>
                   </label>
                 </div>
