@@ -14,17 +14,8 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Maximize2,
 } from 'lucide-react';
-
-// Fix Leaflet default marker icons issue in Next.js bundler
-if (typeof window !== 'undefined') {
-  delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-  });
-}
 
 // Bounding box strictly limiting the map to Gerbangkertosusila
 // (Gresik, Bangkalan, Mojokerto, Surabaya, Sidoarjo, Lamongan + Bawean)
@@ -225,10 +216,12 @@ function MapController({
   onMapReady,
   target,
   regency,
+  resetTrigger = 0,
 }: {
   onMapReady: (map: L.Map) => void;
   target: [number, number] | null;
   regency: string;
+  resetTrigger?: number;
 }) {
   const map = useMap();
 
@@ -249,6 +242,12 @@ function MapController({
     }
   }, [regency, map]);
 
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1.0 });
+    }
+  }, [resetTrigger, map]);
+
   return null;
 }
 
@@ -256,7 +255,8 @@ export interface LeafletMapProps {
   onFeatureSelect?: (properties: Record<string, unknown>) => void;
   flyToCoord?: [number, number] | null;
   selectedRegency?: string;
-  onResetRegency?: () => void;
+  resetViewTrigger?: number;
+  onResetAll?: () => void;
   onDataLoaded?: (data: {
     tamanCount: number;
     mangroveCount: number;
@@ -284,7 +284,8 @@ export default function LeafletMap({
   onFeatureSelect,
   flyToCoord = null,
   selectedRegency = 'all',
-  onResetRegency,
+  resetViewTrigger = 0,
+  onResetAll,
   onDataLoaded,
   onFilteredStatsChange,
   isSidebarOpen = true,
@@ -296,8 +297,8 @@ export default function LeafletMap({
   const [rawPemakaman, setRawPemakaman] = useState<Feature[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Basemap & Layer control state
-  const [activeBasemap, setActiveBasemap] = useState<'osm' | 'satellite' | 'positron'>('osm');
+  // Basemap & Layer control state (Positron default for clean Apple Maps-style cartography)
+  const [activeBasemap, setActiveBasemap] = useState<'osm' | 'satellite' | 'positron'>('positron');
   const [visibleLayers, setVisibleLayers] = useState({
     taman: true,
     mangrove: true,
@@ -305,6 +306,13 @@ export default function LeafletMap({
     pemakaman: true,
   });
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
+  // Collapse Layers & Legenda panel automatically on small/mobile screens
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsPanelCollapsed(true);
+    }
+  }, []);
 
   // Zoom Actions
   const handleZoomIn = useCallback(() => {
@@ -318,6 +326,15 @@ export default function LeafletMap({
       mapInstance.zoomOut();
     }
   }, [mapInstance]);
+
+  const handleResetView = useCallback(() => {
+    if (mapInstance) {
+      mapInstance.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1.0 });
+    }
+    if (onResetAll) {
+      onResetAll();
+    }
+  }, [mapInstance, onResetAll]);
 
   // Fetch the comprehensive merged dataset asynchronously
   useEffect(() => {
@@ -632,8 +649,9 @@ export default function LeafletMap({
           onMapReady={setMapInstance}
           target={flyToCoord}
           regency={selectedRegency}
+          resetTrigger={resetViewTrigger}
         />
-        <ScaleControl position="bottomleft" imperial={false} />
+        <ScaleControl position="bottomright" imperial={false} />
 
         {/* Dynamic Basemap Tile Layer */}
         {activeBasemap === 'osm' && (
@@ -732,65 +750,74 @@ export default function LeafletMap({
         ) : null}
       </MapContainer>
 
-      {/* Top-Left Technical GIS Navigation Controls (Zoom In, Zoom Out, Reset Center, North) */}
+      {/* Top-Left Apple Maps HUD Zoom Controls (shifts beside floating glass sheet when open) */}
       <div
-        className={`absolute z-[900] pointer-events-auto transition-all duration-200 ${
-          isSidebarOpen ? 'top-4 left-4' : 'top-16 left-4'
+        className={`absolute z-[900] pointer-events-auto transition-all duration-300 ease-out ${
+          isSidebarOpen ? 'top-4 left-4 md:left-[388px]' : 'top-16 left-4'
         }`}
       >
-        <div className="flex flex-col bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-md overflow-hidden">
+        <div className="flex flex-col bg-white/85 dark:bg-[#1c1c1e]/85 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] overflow-hidden">
           <button
             type="button"
             onClick={handleZoomIn}
-            className="w-8 h-8 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border-b border-slate-200 dark:border-slate-800 transition-colors cursor-pointer select-none"
+            className="w-8 h-8 flex items-center justify-center text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] border-b border-black/[0.06] dark:border-white/[0.08] transition-colors cursor-pointer select-none"
             title="Perbesar Peta (Zoom In)"
             aria-label="Zoom in"
           >
-            <span className="text-base font-semibold leading-none">+</span>
+            <span className="text-base font-normal leading-none">+</span>
           </button>
           <button
             type="button"
             onClick={handleZoomOut}
-            className="w-8 h-8 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer select-none"
+            className="w-8 h-8 flex items-center justify-center text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] border-b border-black/[0.06] dark:border-white/[0.08] transition-colors cursor-pointer select-none"
             title="Perkecil Peta (Zoom Out)"
             aria-label="Zoom out"
           >
-            <span className="text-base font-semibold leading-none">&minus;</span>
+            <span className="text-base font-normal leading-none">&minus;</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleResetView}
+            className="w-8 h-8 flex items-center justify-center text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer select-none"
+            title="Lihat Semua Titik (Reset Tampilan)"
+            aria-label="Lihat semua titik"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Top-Right Unified Collapsible "Layers & Legenda" Control */}
+      {/* Top-Right Unified Collapsible "Layers & Legenda" HUD */}
       <div className="absolute top-4 right-4 z-[900] pointer-events-auto">
         {isPanelCollapsed ? (
           <button
             onClick={() => setIsPanelCollapsed(false)}
-            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-md text-xs font-medium text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 bg-white/85 dark:bg-[#1c1c1e]/85 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] text-[12px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-white/95 dark:hover:bg-[#2c2c2e]/90 transition-colors cursor-pointer"
             title="Buka Panel Layers & Legenda"
           >
-            <Layers className="w-4 h-4 text-slate-500" />
-            <span>Layers & Legenda</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            <Layers className="w-3.5 h-3.5 text-[#6e6e73] dark:text-[#98989d]" />
+            <span>Layers &amp; Legenda</span>
+            <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
               {Object.values(visibleLayers).filter(Boolean).length}/4
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-[#86868b]" />
           </button>
         ) : (
-          <div className="w-72 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md shadow-lg overflow-hidden text-xs">
+          <div className="w-[calc(100vw-32px)] sm:w-72 bg-white/85 dark:bg-[#1c1c1e]/85 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] rounded-[12px] shadow-[0_8px_28px_rgba(0,0,0,0.12)] overflow-hidden text-xs">
             {/* Panel Header */}
-            <div className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-black/[0.06] dark:border-white/[0.08]">
               <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-slate-700 dark:text-slate-200" />
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  Layers & Legenda
+                <Layers className="w-3.5 h-3.5 text-[#6e6e73] dark:text-[#98989d]" />
+                <span className="font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tracking-[-0.01em]">
+                  Layers &amp; Legenda
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">
-                  ({Object.values(visibleLayers).filter(Boolean).length}/4)
+                <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                  {Object.values(visibleLayers).filter(Boolean).length}/4
                 </span>
               </div>
               <button
                 onClick={() => setIsPanelCollapsed(true)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                className="p-1 rounded-[6px] text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
                 title="Ciutkan Panel"
                 aria-label="Ciutkan panel"
               >
@@ -798,39 +825,39 @@ export default function LeafletMap({
               </button>
             </div>
 
-            <div className="p-3 space-y-3.5 max-h-[calc(100vh-140px)] overflow-y-auto">
-              {/* Section 1: Peta Dasar (Basemap Switcher) */}
+            <div className="p-3.5 space-y-3.5 max-h-[calc(100vh-140px)] overflow-y-auto">
+              {/* Section 1: Peta Dasar (Apple Segmented Control) */}
               <div>
-                <div className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                <div className="text-[11px] font-medium text-[#86868b] mb-1.5">
                   Peta Dasar
                 </div>
-                <div className="grid grid-cols-3 gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                <div className="grid grid-cols-3 p-[2px] bg-black/[0.05] dark:bg-white/[0.08] rounded-[8px]">
                   <button
                     onClick={() => setActiveBasemap('osm')}
-                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                    className={`py-1.5 px-2 text-[11px] rounded-[6px] transition-all text-center cursor-pointer ${
                       activeBasemap === 'osm'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] font-medium'
+                        : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
                     }`}
                   >
                     Standar
                   </button>
                   <button
                     onClick={() => setActiveBasemap('satellite')}
-                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                    className={`py-1.5 px-2 text-[11px] rounded-[6px] transition-all text-center cursor-pointer ${
                       activeBasemap === 'satellite'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] font-medium'
+                        : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
                     }`}
                   >
                     Satelit
                   </button>
                   <button
                     onClick={() => setActiveBasemap('positron')}
-                    className={`py-1.5 px-2 text-[11px] font-medium rounded transition-all text-center cursor-pointer ${
+                    className={`py-1.5 px-2 text-[11px] rounded-[6px] transition-all text-center cursor-pointer ${
                       activeBasemap === 'positron'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                        ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] font-medium'
+                        : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
                     }`}
                   >
                     Positron
@@ -838,11 +865,11 @@ export default function LeafletMap({
                 </div>
               </div>
 
-              {/* Section 2: Lapisan Tematik RTH & Legenda Terpadu */}
+              {/* Section 2: Lapisan Tematik RTH & Legenda Terpadu (Hairline List) */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400">
-                    Lapisan Tematik & Legenda
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-medium text-[#86868b]">
+                    Lapisan Tematik
                   </span>
                   <button
                     onClick={() => {
@@ -854,15 +881,15 @@ export default function LeafletMap({
                         pemakaman: !allActive,
                       });
                     }}
-                    className="text-[10px] font-mono text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                    className="text-[11px] text-[#007aff] dark:text-[#0a84ff] hover:underline transition-colors cursor-pointer"
                   >
                     {Object.values(visibleLayers).every(Boolean) ? 'Nonaktifkan' : 'Aktifkan'}
                   </button>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
                   {/* Taman */}
-                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                  <label className="flex items-center justify-between py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] rounded-[6px] px-1 -mx-1 cursor-pointer transition-colors">
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -870,26 +897,26 @@ export default function LeafletMap({
                         onChange={(e) =>
                           setVisibleLayers((prev) => ({ ...prev, taman: e.target.checked }))
                         }
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                        className="rounded border-black/20 accent-[#1d1d1f] dark:accent-[#f5f5f7] cursor-pointer"
                       />
                       <span
-                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: THEMATIC_STYLES.taman.fillColor }}
                       />
                       <div>
-                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
                           {THEMATIC_STYLES.taman.label}
                         </div>
-                        <div className="text-[10px] text-slate-400">Taman kota & alun-alun</div>
+                        <div className="text-[10px] text-[#86868b]">Taman kota &amp; alun-alun</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
                       {tamanFeatures.length.toLocaleString('id-ID')}
                     </span>
                   </label>
 
                   {/* Mangrove */}
-                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                  <label className="flex items-center justify-between py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] rounded-[6px] px-1 -mx-1 cursor-pointer transition-colors">
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -897,26 +924,26 @@ export default function LeafletMap({
                         onChange={(e) =>
                           setVisibleLayers((prev) => ({ ...prev, mangrove: e.target.checked }))
                         }
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                        className="rounded border-black/20 accent-[#1d1d1f] dark:accent-[#f5f5f7] cursor-pointer"
                       />
                       <span
-                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: THEMATIC_STYLES.mangrove.fillColor }}
                       />
                       <div>
-                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
                           {THEMATIC_STYLES.mangrove.label}
                         </div>
-                        <div className="text-[10px] text-slate-400">Hutan lindung & mangrove</div>
+                        <div className="text-[10px] text-[#86868b]">Hutan lindung &amp; mangrove</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
                       {mangroveFeatures.length.toLocaleString('id-ID')}
                     </span>
                   </label>
 
                   {/* Olahraga */}
-                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                  <label className="flex items-center justify-between py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] rounded-[6px] px-1 -mx-1 cursor-pointer transition-colors">
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -924,26 +951,26 @@ export default function LeafletMap({
                         onChange={(e) =>
                           setVisibleLayers((prev) => ({ ...prev, olahraga: e.target.checked }))
                         }
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                        className="rounded border-black/20 accent-[#1d1d1f] dark:accent-[#f5f5f7] cursor-pointer"
                       />
                       <span
-                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: THEMATIC_STYLES.olahraga.fillColor }}
                       />
                       <div>
-                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
                           {THEMATIC_STYLES.olahraga.label}
                         </div>
-                        <div className="text-[10px] text-slate-400">Lapangan & stadion</div>
+                        <div className="text-[10px] text-[#86868b]">Lapangan &amp; stadion</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
                       {olahragaFeatures.length.toLocaleString('id-ID')}
                     </span>
                   </label>
 
                   {/* Pemakaman */}
-                  <label className="flex items-center justify-between p-2 rounded border border-slate-200/80 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                  <label className="flex items-center justify-between py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] rounded-[6px] px-1 -mx-1 cursor-pointer transition-colors">
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
@@ -951,20 +978,20 @@ export default function LeafletMap({
                         onChange={(e) =>
                           setVisibleLayers((prev) => ({ ...prev, pemakaman: e.target.checked }))
                         }
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                        className="rounded border-black/20 accent-[#1d1d1f] dark:accent-[#f5f5f7] cursor-pointer"
                       />
                       <span
-                        className="w-3.5 h-3 rounded-xs flex-shrink-0 border border-slate-700/40"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: THEMATIC_STYLES.pemakaman.fillColor }}
                       />
                       <div>
-                        <div className="font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                        <div className="font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
                           {THEMATIC_STYLES.pemakaman.label}
                         </div>
-                        <div className="text-[10px] text-slate-400">Pemakaman umum</div>
+                        <div className="text-[10px] text-[#86868b]">Pemakaman umum</div>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500 tabular-nums">
+                    <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
                       {pemakamanFeatures.length.toLocaleString('id-ID')}
                     </span>
                   </label>
@@ -972,7 +999,7 @@ export default function LeafletMap({
               </div>
 
               {/* Footer Acuan */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+              <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[10px] text-[#86868b] font-mono">
                 <span>Permen ATR 14/2022</span>
                 <span>Klik poligon: Detail</span>
               </div>

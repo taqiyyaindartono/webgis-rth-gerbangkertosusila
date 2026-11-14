@@ -1,24 +1,15 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import {
-  MapPin,
-  Layers,
-  Trees,
-  Activity,
-  Award,
-  Users,
   Info,
   ChevronLeft,
   ChevronRight,
   Menu,
   X,
-  Compass,
-  Building2,
   ExternalLink,
   Search,
-  Landmark,
 } from 'lucide-react';
 
 interface PresetLocation {
@@ -329,17 +320,6 @@ function matchPresetRegency(presetKabKota: string, targetRegency: string): boole
   return true;
 }
 
-// Regency quick navigation chips
-const REGENCY_CHIPS = [
-  { id: 'all', shortName: 'Semua', count: '3.735' },
-  { id: 'Kota Surabaya', shortName: 'Surabaya', count: '1.360' },
-  { id: 'Kabupaten Sidoarjo', shortName: 'Sidoarjo', count: '280' },
-  { id: 'Kabupaten Gresik', shortName: 'Gresik', count: '61' },
-  { id: 'Kabupaten Mojokerto', shortName: 'Mojokerto', count: '1.644' },
-  { id: 'Kabupaten Lamongan', shortName: 'Lamongan', count: '321' },
-  { id: 'Kabupaten Bangkalan', shortName: 'Bangkalan', count: '54' },
-];
-
 // 6 Metropolitan Agglomeration Regions Distribution
 const METRO_DISTRIBUTION = [
   { id: 'Kota Surabaya', name: 'Kota Surabaya', count: 1360, share: '36,4%', note: 'Pusat metropolitan inti' },
@@ -351,6 +331,18 @@ const METRO_DISTRIBUTION = [
   { id: 'Kota Mojokerto', name: 'Kota Mojokerto', count: 15, share: '0,4%', note: 'RTH perkotaan kompak' },
 ];
 
+// Luas wilayah administrasi resmi (Hektar, BPS Jawa Timur) untuk perhitungan rasio UU 26/2007
+const REGENCY_ADMIN_AREA_HA: Record<string, number> = {
+  all: 630328,
+  'Kota Surabaya': 33528,
+  'Kabupaten Sidoarjo': 71424,
+  'Kabupaten Gresik': 119125,
+  'Kota Mojokerto': 2021,
+  'Kabupaten Mojokerto': 96936,
+  'Kabupaten Lamongan': 181280,
+  'Kabupaten Bangkalan': 126014,
+};
+
 export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'locations' | 'team'>('overview');
@@ -359,6 +351,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegency, setSelectedRegency] = useState<string>('all');
   const [showRegulationInfo, setShowRegulationInfo] = useState(false);
+  const [resetViewTrigger, setResetViewTrigger] = useState(0);
 
   const [regencyStats, setRegencyStats] = useState({
     tamanCount: 1876,
@@ -400,9 +393,23 @@ export default function Home() {
     []
   );
 
-  const handleFlyTo = (coords: [number, number]) => {
+  const handleFlyTo = useCallback((coords: [number, number]) => {
     setSelectedCoord([...coords]);
-  };
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  }, []);
+
+  const handleShowAllPoints = useCallback(() => {
+    setSelectedRegency('all');
+    setActiveCategoryFilter('all');
+    setSearchQuery('');
+    setSelectedCoord(null);
+    setResetViewTrigger((prev) => prev + 1);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  }, []);
 
   const totalCount = regencyStats.totalCount || 1;
   const pTaman = Math.round((regencyStats.tamanCount / totalCount) * 1000) / 10;
@@ -410,57 +417,59 @@ export default function Home() {
   const pOlahraga = Math.round((regencyStats.olahragaCount / totalCount) * 1000) / 10;
   const pPemakaman = Math.round((regencyStats.pemakamanCount / totalCount) * 1000) / 10;
 
-  const filteredPresets = PRESET_LOCATIONS.filter((item) => {
-    const matchCategory =
-      activeCategoryFilter === 'all'
-        ? true
-        : activeCategoryFilter === 'alun-alun'
-        ? item.category === 'alun-alun'
-        : item.category === activeCategoryFilter;
+  // Evaluasi dinamis Mandat UU No. 26/2007 (Min. 20% RTH Publik terhadap luas wilayah)
+  const adminAreaHa = REGENCY_ADMIN_AREA_HA[selectedRegency] ?? REGENCY_ADMIN_AREA_HA.all;
+  const rthRatioPct = Math.round((regencyStats.totalAreaHa / adminAreaHa) * 1000) / 10;
+  const meetsMandate = rthRatioPct >= 20;
+  const diffPct = Math.round((rthRatioPct - 20) * 10) / 10;
+  const progressWidthPct = Math.min(100, Math.max(2, Math.round((rthRatioPct / 30) * 1000) / 10));
 
-    const matchSearch =
-      searchQuery.trim() === ''
-        ? true
-        : item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.kabKota.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (item.badge && item.badge.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredPresets = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return PRESET_LOCATIONS.filter((item) => {
+      const matchCategory =
+        activeCategoryFilter === 'all' ? true : item.category === activeCategoryFilter;
 
-    const matchRegency = matchPresetRegency(item.kabKota, selectedRegency);
+      const matchSearch =
+        query === ''
+          ? true
+          : item.name.toLowerCase().includes(query) ||
+            item.kabKota.toLowerCase().includes(query) ||
+            (item.badge && item.badge.toLowerCase().includes(query));
 
-    return matchCategory && matchSearch && matchRegency;
-  });
+      const matchRegency = matchPresetRegency(item.kabKota, selectedRegency);
+
+      return matchCategory && matchSearch && matchRegency;
+    });
+  }, [activeCategoryFilter, searchQuery, selectedRegency]);
 
   return (
-    <main className="h-screen w-screen overflow-hidden flex flex-row relative bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
-      {/* Mobile Backdrop Overlay */}
-      {isSidebarOpen && (
-        <div
-          onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-900/50 z-30 md:hidden"
-        />
-      )}
-
-      {/* LEFT SIDEBAR - Solid, flat, professional cartographic styling */}
+    <main className="h-screen w-screen overflow-hidden relative bg-[#f5f5f7] dark:bg-black text-[#1d1d1f] dark:text-[#f5f5f7]">
+      {/* FLOATING GLASS INSPECTOR SHEET - Bottom sheet on mobile, floating left sheet on desktop */}
       <aside
-        className={`fixed md:relative z-40 h-full w-[85vw] sm:w-[360px] md:w-[360px] flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-200 ease-in-out ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-ml-[360px]'
+        className={`fixed inset-x-3 bottom-3 max-h-[56vh] md:inset-auto md:top-4 md:left-4 md:bottom-4 md:w-[356px] md:max-h-none z-[1100] rounded-[18px] bg-white/80 dark:bg-[#1c1c1e]/82 backdrop-blur-2xl backdrop-saturate-150 border border-black/[0.08] dark:border-white/[0.12] shadow-[0_12px_40px_rgba(0,0,0,0.12)] flex flex-col overflow-hidden transition-all duration-300 ease-out ${
+          isSidebarOpen
+            ? 'translate-y-0 md:translate-x-0 opacity-100'
+            : 'translate-y-[calc(100%+24px)] md:translate-y-0 md:-translate-x-[calc(100%+24px)] opacity-0 pointer-events-none'
         }`}
       >
-        {/* Solid Cartographic Sidebar Header */}
-        <header className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 ring-3 ring-emerald-500/20" />
-              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                WebGIS Gerbangkertosusila
-              </span>
-            </div>
+        {/* Mobile Sheet Grabber */}
+        <div className="pt-2 pb-0.5 flex justify-center md:hidden">
+          <span className="w-9 h-1 rounded-full bg-black/15 dark:bg-white/20" />
+        </div>
 
-            {/* Close button inside sidebar */}
+        {/* Clean Apple Maps Sheet Header */}
+        <header className="px-4 pt-2 md:pt-4 pb-3.5 border-b border-black/[0.06] dark:border-white/[0.08] flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-[#86868b]">
+              WebGIS Gerbangkertosusila
+            </span>
+
+            {/* Close button inside sheet */}
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              aria-label="Tutup Sidebar"
+              className="p-1 -mr-1 rounded-full text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white hover:bg-black/[0.06] dark:hover:bg-white/[0.1] transition-colors cursor-pointer"
+              aria-label="Tutup Panel"
               title="Sembunyikan Panel"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -468,294 +477,359 @@ export default function Home() {
           </div>
 
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            <h1 className="text-[17px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-[#f5f5f7] leading-snug">
               Atlas Ruang Terbuka Hijau
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal mt-0.5">
-              Inventarisasi spasial 6 wilayah metropolitan: Surabaya, Sidoarjo, Gresik, Mojokerto, Lamongan, dan Bangkalan.
+            <p className="text-[12px] text-[#6e6e73] dark:text-[#98989d] leading-snug mt-0.5">
+              {selectedRegency === 'all' ? '6 Wilayah Metropolitan Jawa Timur' : selectedRegency}
             </p>
           </div>
 
-          {/* Clean Telemetry Strip (No heavy grid boxes) */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-            <span className="tabular-nums font-medium text-slate-700 dark:text-slate-300">
-              {regencyStats.totalCount.toLocaleString('id-ID')} poligon
-            </span>
-            <span>&bull;</span>
-            <span className="tabular-nums font-medium text-slate-700 dark:text-slate-300">
-              {regencyStats.totalAreaHa.toLocaleString('id-ID')} ha
-            </span>
-            <span>&bull;</span>
-            <span>WGS 84</span>
+          {/* Apple-style Display Hero Stat Pair */}
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-[19px] font-semibold tracking-tight tabular-nums text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  {regencyStats.totalAreaHa.toLocaleString('id-ID')}
+                </span>
+                <span className="text-[11px] font-medium text-[#86868b]">ha</span>
+              </div>
+              <div className="text-[11px] text-[#6e6e73] dark:text-[#98989d]">
+                Luas RTH terpetakan
+              </div>
+            </div>
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[19px] font-semibold tracking-tight tabular-nums text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  {regencyStats.totalCount.toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] font-mono text-[#86868b]">WGS 84</span>
+              </div>
+              <div className="text-[11px] text-[#6e6e73] dark:text-[#98989d]">
+                Poligon spasial
+              </div>
+            </div>
           </div>
         </header>
 
-        {/* Regency Spatial Selector with Quick Filter Chips */}
-        <div className="px-4 py-3 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              Wilayah Observasi
-            </span>
-            {selectedRegency !== 'all' && (
-              <button
-                onClick={() => setSelectedRegency('all')}
-                className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-              >
-                Tampilkan semua
-              </button>
-            )}
-          </div>
-
-          {/* Quick Regency Filter Chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {REGENCY_CHIPS.map((chip) => {
-              const isActive = selectedRegency === chip.id;
-              return (
+        {/* macOS Pop-up Select for Regency & Segmented Control Tabs */}
+        <div className="px-4 py-3 border-b border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="regency-select" className="text-[11px] font-medium text-[#86868b]">
+                Wilayah Observasi
+              </label>
+              {selectedRegency !== 'all' && (
                 <button
-                  key={chip.id}
-                  onClick={() => setSelectedRegency(chip.id)}
-                  className={`px-2 py-1 rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-medium shadow-xs'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
-                  }`}
+                  onClick={() => setSelectedRegency('all')}
+                  className="text-[11px] text-[#007aff] dark:text-[#0a84ff] hover:underline cursor-pointer"
                 >
-                  <span>{chip.shortName}</span>
-                  <span
-                    className={`font-mono text-[10px] tabular-nums ${
-                      isActive
-                        ? 'text-slate-300 dark:text-slate-600'
-                        : 'text-slate-400 dark:text-slate-500'
-                    }`}
-                  >
-                    {chip.count}
-                  </span>
+                  Tampilkan semua
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className="relative">
+              <select
+                id="regency-select"
+                value={selectedRegency}
+                onChange={(e) => setSelectedRegency(e.target.value)}
+                className="w-full bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.07] dark:hover:bg-white/[0.11] text-[#1d1d1f] dark:text-[#f5f5f7] text-[12px] rounded-[9px] px-2.5 py-1.5 pr-8 focus:outline-none focus:ring-2 focus:ring-[#007aff]/30 font-medium cursor-pointer transition-colors appearance-none"
+              >
+                <option value="all">Semua Wilayah (3.735 poligon)</option>
+                <option value="Kota Surabaya">Kota Surabaya (1.360)</option>
+                <option value="Kabupaten Mojokerto">Kabupaten Mojokerto (1.644)</option>
+                <option value="Kabupaten Lamongan">Kabupaten Lamongan (321)</option>
+                <option value="Kabupaten Sidoarjo">Kabupaten Sidoarjo (280)</option>
+                <option value="Kabupaten Gresik">Kabupaten Gresik (61)</option>
+                <option value="Kabupaten Bangkalan">Kabupaten Bangkalan (54)</option>
+                <option value="Kota Mojokerto">Kota Mojokerto (15)</option>
+              </select>
+              <ChevronRight className="w-3.5 h-3.5 absolute right-2.5 top-2 rotate-90 text-[#86868b] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Apple Segmented Control */}
+          <div className="grid grid-cols-3 p-[3px] bg-black/[0.05] dark:bg-white/[0.08] rounded-[9px] text-[12px]">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-1 px-2 rounded-[6px] transition-all cursor-pointer ${
+                activeTab === 'overview'
+                  ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                  : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
+              }`}
+            >
+              Ringkasan
+            </button>
+            <button
+              onClick={() => setActiveTab('locations')}
+              className={`py-1 px-2 rounded-[6px] transition-all cursor-pointer ${
+                activeTab === 'locations'
+                  ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                  : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
+              }`}
+            >
+              Pintasan ({filteredPresets.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`py-1 px-2 rounded-[6px] transition-all cursor-pointer ${
+                activeTab === 'team'
+                  ? 'bg-white dark:bg-[#2c2c2e] text-[#1d1d1f] dark:text-white font-medium shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                  : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-white'
+              }`}
+            >
+              Tim
+            </button>
           </div>
         </div>
 
-        {/* Studio Navigation Tabs - Slim Underline Style */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-4 text-xs bg-white dark:bg-slate-900">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-              activeTab === 'overview'
-                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Ringkasan
-          </button>
-          <button
-            onClick={() => setActiveTab('locations')}
-            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-              activeTab === 'locations'
-                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Pintasan ({filteredPresets.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('team')}
-            className={`py-2.5 px-3 font-medium transition-colors cursor-pointer border-b-2 -mb-px ${
-              activeTab === 'team'
-                ? 'border-slate-900 dark:border-slate-100 text-slate-900 dark:text-slate-100 font-semibold'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Metadata &amp; Tim
-          </button>
-        </div>
-
-        {/* Sidebar Content (Scrollable) */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4 pt-3">
+        {/* Sidebar Content (Scrollable, flat surface with hairline dividers) */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3.5 space-y-4">
           {/* TAB 1: OVERVIEW & SPATIAL ANALYTICS */}
           {activeTab === 'overview' && (
             <div className="space-y-4">
               {/* 1. Komposisi Kategori RTH */}
-              <section className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    Komposisi Kategori RTH
+              <section className="space-y-2.5">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    Komposisi Kategori
                   </h2>
-                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[140px]">
-                    {regencyStats.regencyName}
+                  <span className="text-[11px] text-[#86868b]">
+                    Proporsi poligon
                   </span>
                 </div>
 
-                {/* Stacked Horizontal Bar */}
-                <div className="w-full h-2 rounded-xs overflow-hidden flex bg-slate-100 dark:bg-slate-800">
+                {/* Slim Stacked Horizontal Bar */}
+                <div className="w-full h-1.5 rounded-full overflow-hidden flex bg-black/[0.06] dark:bg-white/[0.1]">
                   <div style={{ width: `${pTaman}%`, backgroundColor: '#2ECC71' }} title={`Taman: ${pTaman}%`} />
                   <div style={{ width: `${pMangrove}%`, backgroundColor: '#1B5E20' }} title={`Mangrove & Hutan: ${pMangrove}%`} />
                   <div style={{ width: `${pOlahraga}%`, backgroundColor: '#FFA502' }} title={`Olahraga: ${pOlahraga}%`} />
                   <div style={{ width: `${pPemakaman}%`, backgroundColor: '#0D9488' }} title={`Pemakaman: ${pPemakaman}%`} />
                 </div>
 
-                {/* Tabular Metric List */}
-                <div className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {/* Clean 2-Line Hairline Rows (no cramped 3-column numbers) */}
+                <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08] text-[12px]">
                   {/* Taman */}
-                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#2ECC71' }} />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">Taman Kota &amp; Alun-Alun</span>
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#2ECC71' }} />
+                      <div className="min-w-0">
+                        <div className="text-[#1d1d1f] dark:text-[#f5f5f7] truncate leading-tight">
+                          Taman Kota &amp; Alun-Alun
+                        </div>
+                        <div className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                          {regencyStats.tamanCount.toLocaleString('id-ID')} poligon
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
-                      <span className="text-slate-400 tabular-nums">{regencyStats.tamanCount.toLocaleString('id-ID')} obj</span>
-                      <span className="text-slate-400 tabular-nums">{regencyStats.tamanAreaHa.toLocaleString('id-ID')} Ha</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pTaman}%</span>
+                    <div className="text-right flex-shrink-0 pl-2">
+                      <div className="font-mono text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                        {pTaman}%
+                      </div>
+                      <div className="text-[10px] font-mono text-[#86868b] tabular-nums">
+                        {regencyStats.tamanAreaHa.toLocaleString('id-ID')} ha
+                      </div>
                     </div>
                   </div>
 
                   {/* Mangrove */}
-                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#1B5E20' }} />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">Hutan Kota &amp; Mangrove</span>
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#1B5E20' }} />
+                      <div className="min-w-0">
+                        <div className="text-[#1d1d1f] dark:text-[#f5f5f7] truncate leading-tight">
+                          Hutan Kota &amp; Mangrove
+                        </div>
+                        <div className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                          {regencyStats.mangroveCount.toLocaleString('id-ID')} poligon
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
-                      <span className="text-slate-400 tabular-nums">{regencyStats.mangroveCount.toLocaleString('id-ID')} obj</span>
-                      <span className="text-slate-400 tabular-nums">{regencyStats.mangroveAreaHa.toLocaleString('id-ID')} Ha</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pMangrove}%</span>
+                    <div className="text-right flex-shrink-0 pl-2">
+                      <div className="font-mono text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                        {pMangrove}%
+                      </div>
+                      <div className="text-[10px] font-mono text-[#86868b] tabular-nums">
+                        {regencyStats.mangroveAreaHa.toLocaleString('id-ID')} ha
+                      </div>
                     </div>
                   </div>
 
                   {/* Olahraga */}
-                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#FFA502' }} />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">Lapangan Olahraga</span>
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#FFA502' }} />
+                      <div className="min-w-0">
+                        <div className="text-[#1d1d1f] dark:text-[#f5f5f7] truncate leading-tight">
+                          Lapangan Olahraga
+                        </div>
+                        <div className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                          {regencyStats.olahragaCount.toLocaleString('id-ID')} poligon
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
-                      <span className="text-slate-400 tabular-nums">{regencyStats.olahragaCount.toLocaleString('id-ID')} obj</span>
-                      <span className="text-slate-400 tabular-nums">{regencyStats.olahragaAreaHa.toLocaleString('id-ID')} Ha</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pOlahraga}%</span>
+                    <div className="text-right flex-shrink-0 pl-2">
+                      <div className="font-mono text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                        {pOlahraga}%
+                      </div>
+                      <div className="text-[10px] font-mono text-[#86868b] tabular-nums">
+                        {regencyStats.olahragaAreaHa.toLocaleString('id-ID')} ha
+                      </div>
                     </div>
                   </div>
 
                   {/* Pemakaman */}
-                  <div className="flex items-center justify-between py-2 px-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2 rounded-xs flex-shrink-0" style={{ backgroundColor: '#0D9488' }} />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">RTH Pemakaman</span>
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: '#0D9488' }} />
+                      <div className="min-w-0">
+                        <div className="text-[#1d1d1f] dark:text-[#f5f5f7] truncate leading-tight">
+                          RTH Pemakaman
+                        </div>
+                        <div className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                          {regencyStats.pemakamanCount.toLocaleString('id-ID')} poligon
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2.5 font-mono text-[11px] flex-shrink-0 pl-2">
-                      <span className="text-slate-400 tabular-nums">{regencyStats.pemakamanCount.toLocaleString('id-ID')} obj</span>
-                      <span className="text-slate-400 tabular-nums">{regencyStats.pemakamanAreaHa.toLocaleString('id-ID')} Ha</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums w-11 text-right">{pPemakaman}%</span>
+                    <div className="text-right flex-shrink-0 pl-2">
+                      <div className="font-mono text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                        {pPemakaman}%
+                      </div>
+                      <div className="text-[10px] font-mono text-[#86868b] tabular-nums">
+                        {regencyStats.pemakamanAreaHa.toLocaleString('id-ID')} ha
+                      </div>
                     </div>
                   </div>
                 </div>
               </section>
 
-              {/* 2. Tolok Ukur Mandat UU 26/2007 */}
-              <section className="p-3 rounded border border-slate-200 dark:border-slate-800 space-y-2 bg-slate-50/60 dark:bg-slate-900/40">
-                <div className="flex items-center justify-between text-xs">
+              <hr className="border-black/[0.06] dark:border-white/[0.08]" />
+
+              {/* 2. Mandat UU 26/2007 (Dinamis per Kota/Kabupaten) */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between text-[12px]">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    <span className="font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
                       Mandat UU 26/2007
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowRegulationInfo(!showRegulationInfo)}
-                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                      className="text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white transition-colors cursor-pointer"
                       title={showRegulationInfo ? 'Tutup info regulasi' : 'Buka detail regulasi'}
                       aria-label="Info regulasi"
                     >
                       <Info className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <span className="text-[10px] font-mono font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                    Target Min. 20% Publik
+                  <span
+                    className={`text-[11px] font-medium ${
+                      meetsMandate
+                        ? 'text-[#248a3d] dark:text-[#30d158]'
+                        : 'text-[#c93400] dark:text-[#ff9f0a]'
+                    }`}
+                  >
+                    {meetsMandate ? 'Memenuhi (\u2265 20%)' : 'Belum Memenuhi (< 20%)'}
                   </span>
                 </div>
 
                 {showRegulationInfo && (
-                  <div className="p-2.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <div className="p-2.5 rounded-[10px] bg-black/[0.04] dark:bg-white/[0.06] text-[11px] text-[#6e6e73] dark:text-[#98989d] leading-relaxed">
                     <div className="flex items-start justify-between gap-1.5 mb-1">
-                      <span className="font-semibold text-slate-800 dark:text-slate-100 text-[11px]">
-                        Dasar Regulasi:
+                      <span className="font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                        Dasar Regulasi &amp; Rumus
                       </span>
                       <button
                         type="button"
                         onClick={() => setShowRegulationInfo(false)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-1 cursor-pointer"
+                        className="text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white text-xs px-1 cursor-pointer"
                         title="Tutup"
                       >
                         ✕
                       </button>
                     </div>
                     <p>
-                      Pasal 29 UU Penataan Ruang &amp; Permen ATR/BPN No. 14/2022 mewajibkan proporsi RTH publik paling sedikit 20% dari luas kawasan perkotaan aglomerasi.
+                      Pasal 29 UU 26/2007 &amp; Permen ATR/BPN 14/2022 mewajibkan RTH publik minimal 20% per wilayah kota/kawasan perkotaan. Rasio dihitung dinamis dari luas RTH terpetakan ({regencyStats.totalAreaHa.toLocaleString('id-ID')} ha) dibagi luas administrasi BPS ({adminAreaHa.toLocaleString('id-ID')} ha).
                     </p>
                   </div>
                 )}
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400">Capaian Terpetakan</span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
-                      24,2% <span className="font-normal text-slate-400">(+4,2% di atas ambang)</span>
+                    <span className="text-[#6e6e73] dark:text-[#98989d]">
+                      Rasio {selectedRegency === 'all' ? 'Agregat' : 'Wilayah'}
+                    </span>
+                    <span className="font-mono font-medium text-[#1d1d1f] dark:text-[#f5f5f7] tabular-nums">
+                      {rthRatioPct.toLocaleString('id-ID')}%{' '}
+                      <span className="font-normal text-[#86868b]">
+                        ({diffPct >= 0 ? `+${diffPct.toLocaleString('id-ID')}%` : `${diffPct.toLocaleString('id-ID')}%`} dari 20%)
+                      </span>
                     </span>
                   </div>
-                  <div className="relative w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-xs overflow-hidden">
-                    <div className="h-full bg-slate-800 dark:bg-slate-200 rounded-xs" style={{ width: '80%' }} />
-                    <div className="absolute top-0 bottom-0 left-[66%] w-0.5 bg-red-500" title="Ambang Batas Minimum 20%" />
+                  <div className="relative w-full h-1.5 bg-black/[0.06] dark:bg-white/[0.1] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        meetsMandate
+                          ? 'bg-[#248a3d] dark:bg-[#30d158]'
+                          : 'bg-[#1d1d1f] dark:bg-[#f5f5f7]'
+                      }`}
+                      style={{ width: `${progressWidthPct}%` }}
+                    />
+                    <div className="absolute top-0 bottom-0 left-[66.6%] w-0.5 bg-[#ff3b30]" title="Ambang Batas Minimum 20%" />
                   </div>
-                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                  <div className="flex justify-between text-[10px] font-mono text-[#86868b]">
                     <span>0%</span>
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">Batas Min. 20%</span>
-                    <span>30% Target Total</span>
+                    <span className="text-[#6e6e73] dark:text-[#98989d]">Min. 20%</span>
+                    <span>30% Target</span>
                   </div>
                 </div>
               </section>
 
-              {/* 3. Sebaran 6 Wilayah Metropolitan (Replacing redundant cards) */}
+              <hr className="border-black/[0.06] dark:border-white/[0.08]" />
+
+              {/* 3. Sebaran Wilayah Metropolitan */}
               <section className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    Sebaran Wilayah Metropolitan
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    Sebaran Wilayah
                   </h2>
-                  <span className="text-[10px] font-mono text-slate-400">
+                  <span className="text-[11px] text-[#86868b]">
                     Klik untuk fokus
                   </span>
                 </div>
 
-                <div className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08] text-[12px]">
                   {METRO_DISTRIBUTION.map((reg) => {
                     const isSelected = selectedRegency === reg.id;
                     return (
                       <button
                         key={reg.id}
                         onClick={() => setSelectedRegency(reg.id)}
-                        className={`w-full flex items-center justify-between p-2 text-left transition-colors cursor-pointer ${
+                        className={`w-full flex items-center justify-between py-2 px-1.5 -mx-1.5 rounded-[6px] text-left transition-colors cursor-pointer ${
                           isSelected
-                            ? 'bg-slate-100 dark:bg-slate-800 font-medium'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                            ? 'bg-black/[0.05] dark:bg-white/[0.08] font-medium'
+                            : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
                         }`}
                       >
                         <div className="min-w-0 pr-2">
-                          <div className="flex items-center gap-1.5 truncate">
+                          <div className="flex items-center gap-2 truncate">
                             <span
                               className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                isSelected ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
+                                isSelected ? 'bg-[#007aff] dark:bg-[#0a84ff]' : 'bg-black/20 dark:bg-white/25'
                               }`}
                             />
-                            <span className="text-slate-800 dark:text-slate-200 truncate font-medium">
+                            <span className="text-[#1d1d1f] dark:text-[#f5f5f7] truncate">
                               {reg.name}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-400 block pl-3 truncate">
+                          <span className="text-[10px] text-[#86868b] block pl-3.5 truncate">
                             {reg.note}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500 flex-shrink-0">
-                          <span className="tabular-nums">{reg.count.toLocaleString('id-ID')} obj</span>
-                          <span className="tabular-nums text-slate-400">({reg.share})</span>
-                          <ChevronRight className="w-3 h-3 text-slate-400" />
+                        <div className="flex items-center gap-2 font-mono text-[11px] text-[#6e6e73] dark:text-[#98989d] flex-shrink-0">
+                          <span className="tabular-nums">{reg.count.toLocaleString('id-ID')}</span>
+                          <span className="tabular-nums text-[#86868b]">({reg.share})</span>
+                          <ChevronRight className={`w-3.5 h-3.5 ${isSelected ? 'text-[#007aff] dark:text-[#0a84ff]' : 'text-[#86868b]'}`} />
                         </div>
                       </button>
                     );
@@ -768,34 +842,38 @@ export default function Home() {
           {/* TAB 2: INTERACTIVE PRESET LOCATIONS */}
           {activeTab === 'locations' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    Direktori Landmark Spasial
-                  </h3>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
-                    {filteredPresets.length} dari {PRESET_LOCATIONS.length} lokasi
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="text-[12px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  Direktori Landmark
+                </h3>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleShowAllPoints}
+                    className="text-[11px] font-medium text-[#007aff] dark:text-[#0a84ff] hover:underline cursor-pointer"
+                  >
+                    Lihat semua titik
+                  </button>
+                  <span className="text-[11px] font-mono text-[#86868b] tabular-nums">
+                    {filteredPresets.length} / {PRESET_LOCATIONS.length} lokasi
                   </span>
                 </div>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                  6 daerah
-                </span>
               </div>
 
-              {/* Search Bar Input */}
+              {/* Apple Spotlight-style Search Input */}
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#86868b]" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari nama taman, stadion, kawasan..."
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-colors"
+                  placeholder="Cari taman, stadion, kawasan..."
+                  className="w-full pl-8 pr-7 py-1.5 text-[12px] bg-black/[0.05] dark:bg-white/[0.08] rounded-[8px] focus:bg-white dark:focus:bg-[#2c2c2e] focus:outline-none focus:ring-2 focus:ring-[#007aff]/30 text-[#1d1d1f] dark:text-[#f5f5f7] placeholder-[#86868b] transition-all"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-2 top-2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-white cursor-pointer"
                     aria-label="Hapus pencarian"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -803,80 +881,76 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Category Filter Buttons */}
-              <div className="flex gap-1 overflow-x-auto pb-1 text-xs">
+              {/* Compact Category Filters */}
+              <div className="flex gap-1 overflow-x-auto pb-1 text-[11px]">
                 <button
                   onClick={() => setActiveCategoryFilter('all')}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-[6px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'all'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'bg-[#1d1d1f] text-white dark:bg-[#f5f5f7] dark:text-[#1d1d1f]'
+                      : 'bg-black/[0.04] text-[#6e6e73] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#98989d]'
                   }`}
                 >
                   Semua
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('alun-alun')}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-[6px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'alun-alun'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'bg-[#1d1d1f] text-white dark:bg-[#f5f5f7] dark:text-[#1d1d1f]'
+                      : 'bg-black/[0.04] text-[#6e6e73] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#98989d]'
                   }`}
                 >
-                  <Landmark className="w-3 h-3" />
                   Alun-alun
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('taman')}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-[6px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'taman'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'bg-[#1d1d1f] text-white dark:bg-[#f5f5f7] dark:text-[#1d1d1f]'
+                      : 'bg-black/[0.04] text-[#6e6e73] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#98989d]'
                   }`}
                 >
-                  <Trees className="w-3 h-3" />
                   Taman kota
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('mangrove')}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-[6px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'mangrove'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'bg-[#1d1d1f] text-white dark:bg-[#f5f5f7] dark:text-[#1d1d1f]'
+                      : 'bg-black/[0.04] text-[#6e6e73] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#98989d]'
                   }`}
                 >
-                  <Layers className="w-3 h-3" />
                   Mangrove
                 </button>
                 <button
                   onClick={() => setActiveCategoryFilter('olahraga')}
-                  className={`px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-[6px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                     activeCategoryFilter === 'olahraga'
-                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                      ? 'bg-[#1d1d1f] text-white dark:bg-[#f5f5f7] dark:text-[#1d1d1f]'
+                      : 'bg-black/[0.04] text-[#6e6e73] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#98989d]'
                   }`}
                 >
-                  <Activity className="w-3 h-3" />
                   Stadion
                 </button>
               </div>
 
-              {/* Locations List with Coordinates */}
-              <div className="space-y-1.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-0.5">
+              {/* Flat Hairline-Separated Locations List */}
+              <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08] max-h-[calc(100vh-340px)] overflow-y-auto pr-0.5">
                 {filteredPresets.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-md">
-                    Tidak ditemukan lokasi yang cocok dengan kata kunci &quot;{searchQuery}&quot;
+                  <div className="py-6 text-center text-[12px] text-[#86868b]">
+                    Tidak ada lokasi yang cocok dengan &quot;{searchQuery}&quot;
                   </div>
                 ) : (
                   filteredPresets.map((item, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleFlyTo(item.coords)}
-                      className="w-full text-left p-2.5 rounded-md bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 transition-colors flex items-center justify-between group cursor-pointer"
+                      className="w-full text-left py-2.5 px-1.5 -mx-1.5 rounded-[6px] hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors flex items-center justify-between group cursor-pointer"
                     >
                       <div className="flex items-start gap-2.5 min-w-0">
                         <span
-                          className="w-2 h-2 rounded-xs flex-shrink-0 mt-1"
+                          className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
                           style={{
                             backgroundColor:
                               item.category === 'alun-alun'
@@ -889,27 +963,24 @@ export default function Home() {
                           }}
                         />
                         <div className="min-w-0">
-                          <h4 className="text-xs font-medium text-slate-800 dark:text-slate-100 group-hover:text-slate-950 dark:group-hover:text-white transition-colors leading-snug truncate">
+                          <h4 className="text-[12px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-snug truncate">
                             {item.name}
                           </h4>
-                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                            <span className="font-medium text-slate-600 dark:text-slate-300">{item.kabKota}</span>
-                            <span>•</span>
-                            <span className="font-mono text-[10px] text-slate-400 dark:text-slate-500">
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-[#6e6e73] dark:text-[#98989d]">
+                            <span>{item.kabKota}</span>
+                            <span className="text-[#86868b]">&middot;</span>
+                            <span className="font-mono text-[10px] text-[#86868b]">
                               {item.coords[0].toFixed(4)}°, {item.coords[1].toFixed(4)}°
                             </span>
                           </div>
                           {item.badge && (
-                            <div className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                            <div className="mt-0.5 text-[10px] text-[#86868b] truncate">
                               {item.badge}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-700 dark:text-slate-200 text-xs font-medium ml-2 flex-shrink-0">
-                        <span className="text-[10px] font-mono">Buka</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-[#86868b] opacity-0 group-hover:opacity-100 group-hover:text-[#007aff] dark:group-hover:text-[#0a84ff] transition-all ml-2 flex-shrink-0" />
                     </button>
                   ))
                 )}
@@ -919,62 +990,66 @@ export default function Home() {
 
           {/* TAB 3: TIM PELAKSANA */}
           {activeTab === 'team' && (
-            <div className="space-y-3">
-              <div className="p-3.5 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 block mb-0.5">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <span className="text-[11px] text-[#86868b] block">
                   Kolaborator Proyek
                 </span>
-                <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  Studio GIS & Perencanaan Wilayah Kota
+                <h4 className="text-[13px] font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  Studio GIS &amp; Perencanaan Wilayah Kota
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-[12px] text-[#6e6e73] dark:text-[#98989d] leading-relaxed">
                   Penyusunan Pemetaan Tematik RTH Aglomerasi Gerbangkertosusila.
                 </p>
               </div>
 
-              <div className="space-y-2">
+              <hr className="border-black/[0.06] dark:border-white/[0.08]" />
+
+              <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
                 {TEAM_MEMBERS.map((member, idx) => (
                   <div
                     key={idx}
-                    className="p-2.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between"
+                    className="py-2.5 flex items-center justify-between"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-medium text-xs">
+                      <div className="w-7 h-7 rounded-full bg-black/[0.05] dark:bg-white/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7] flex items-center justify-center font-medium text-[11px]">
                         {member.name === 'Unknown' ? '?' : member.name.charAt(0)}
                       </div>
                       <div>
-                        <h5 className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-tight">
+                        <h5 className="text-[12px] font-medium text-[#1d1d1f] dark:text-[#f5f5f7] leading-tight">
                           {member.name}
                         </h5>
-                        <span className="text-[11px] text-slate-400 block">{member.role}</span>
+                        <span className="text-[11px] text-[#86868b] block">{member.role}</span>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                    <span className="text-[11px] font-mono text-[#6e6e73] dark:text-[#98989d]">
                       {member.nim}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="p-3 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                <ExternalLink className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                <span>Terhubung dengan GitHub Repository & Vercel Deployment</span>
+              <hr className="border-black/[0.06] dark:border-white/[0.08]" />
+
+              <div className="text-[11px] text-[#86868b] flex items-center gap-2">
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Terhubung dengan GitHub Repository &amp; Vercel</span>
               </div>
             </div>
           )}
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] text-slate-400 bg-slate-50/70 dark:bg-slate-900/60 font-mono">
-          <span>WebGIS RTH Metropolitan Gerbangkertosusila &copy; 2026</span>
+        <div className="px-4 py-2.5 border-t border-black/[0.06] dark:border-white/[0.08] text-center text-[10px] text-[#86868b] font-mono">
+          <span>WebGIS RTH Gerbangkertosusila &copy; 2026</span>
         </div>
       </aside>
 
-      {/* SIDEBAR TOGGLE BUTTON - Only when sidebar is closed */}
+      {/* SIDEBAR TOGGLE BUTTON - Apple Maps HUD style when sidebar is closed */}
       {!isSidebarOpen && (
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="absolute top-4 left-4 z-30 p-2 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          className="fixed top-4 left-4 z-[1000] p-2 rounded-[10px] bg-white/85 dark:bg-[#1c1c1e]/85 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_2px_12px_rgba(0,0,0,0.08)] text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-white dark:hover:bg-[#2c2c2e] transition-colors cursor-pointer"
           aria-label="Buka Sidebar"
           title="Buka Panel Informasi"
         >
@@ -982,14 +1057,15 @@ export default function Home() {
         </button>
       )}
 
-      {/* RIGHT MAIN MAP VIEW CONTAINER */}
-      <section className="flex-1 h-full w-full relative overflow-hidden bg-slate-100 dark:bg-slate-900">
+      {/* FULL-BLEED MAP VIEW CONTAINER */}
+      <section className="absolute inset-0 h-full w-full z-0 overflow-hidden bg-[#f5f5f7] dark:bg-[#000000]">
         <MapWrapper
           flyToCoord={selectedCoord}
           selectedRegency={selectedRegency}
-          onResetRegency={() => setSelectedRegency('all')}
           onFilteredStatsChange={handleFilteredStatsChange}
           isSidebarOpen={isSidebarOpen}
+          resetViewTrigger={resetViewTrigger}
+          onResetAll={handleShowAllPoints}
         />
       </section>
     </main>
